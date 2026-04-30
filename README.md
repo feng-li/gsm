@@ -1,18 +1,17 @@
-# gsm-python
+# gsm
 
-`gsm-python` is the Python migration package for the GSMMatlab codebase. The
-current implementation focuses on one working path: covariate-dependent Gaussian
-mixture models fitted with variational Bayes in JAX.
+`gsm` is the Python migration package for the Matlab codebase originally written
+by Mattias Villani and his students starting from 2007. The current implementation focuses on
+one working path: covariate-dependent Gaussian mixture models fitted with variational Bayes in JAX.
 
-The package is intentionally small while the migration is underway. MATLAB MCMC
-code is used as a reference for model semantics and validation, but the Python
+The package is intentionally small while the migration is underway. The Python
 target is variational inference rather than Metropolis-Hastings with Newton
 updates.
 
 ## General Purpose
 
 This repository supports research and migration work for Bayesian
-mixture-of-experts models for conditional density forecasting. In the original
+mixture-of-experts (MoE) models for conditional density forecasting. In the original
 MATLAB code, the method is framed as Generalized Smooth Mixtures: each mixture
 component is an expert distribution, the gating function assigns
 covariate-dependent mixture probabilities, and each distributional feature can
@@ -22,7 +21,7 @@ The financial forecasting use case is full predictive distribution estimation,
 not only point forecasting. The S&P 500 project scripts use smooth mixtures of
 asymmetric Student t and asymmetric normal experts to forecast return
 distributions with time-varying scale, skewness, tail behavior, and mixture
-probabilities. This follows the mixture-of-experts density-forecasting
+probabilities. This follows the mixture-of-experts (MoE) density-forecasting
 literature cited in the MATLAB code, especially the smooth adaptive Gaussian
 mixture work of Villani, Kohn, and Giordani; the generalized smooth-mixture
 framework of Kohn, Villani, and Nott; and the asymmetric Student t financial
@@ -36,7 +35,6 @@ comparison.
 ## Features
 
 - CSV and MATLAB `.mat` data loading helpers.
-- MATLAB-compatible covariate standardization modes.
 - JAX-compatible link and inverse-link functions.
 - Gaussian mixture kernel with identity-linked means, log-linked variances, and
   multinomial-logit gating.
@@ -135,41 +133,18 @@ references:
 | `../MatlabCode/EvalFitGSM.m` | MATLAB LPDS, normalized residual, predictive summary, and LPDS NSE calculation. |
 | `../MatlabCode/setUpCrossVal.m` | Original `orderly`, `systematic`, `random`, and `last` cross-validation splits. |
 
-## Literature Cited In MATLAB Comments
+## Literature
 
-The MATLAB source repeatedly cites the following references. These entries are
-kept here as migration context and should be checked against the final papers
-before formal publication use.
-
-- Villani, M., Kohn, R. and Giordani, P. (2009). Regression Density Estimation
-  using Smooth Adaptive Gaussian Mixtures, Journal of Econometrics.
-  Cited in `../MatlabCode/GSM.m`, `../MatlabCode/EvalFitGSM.m`,
-  `../MatlabCode/PlotPredGSM.m`, and `../MatlabCode/EvalPredPDFGSM.m`.
-- Villani, M., Kohn, R. and Nott, D. (2009). A General Approach to Regression
-  Density Estimation for Discrete and Continuous Data.
-  Cited in `../MatlabCode/GSM.m`, `../MatlabCode/EvalFitGSM.m`, and
-  beta-binomial gradient/Hessian files.
-- Kohn, R. and Villani, M. (2009). A General Approach to Regression Density
-  Estimation using Smooth Mixtures.
-  Cited across model PDF files and project scripts, including
-  `../MatlabCode/models/heteroGauss/HeteroGaussPDF.m` and
-  `../MatlabCode/projects/discreteGLM/MainSMODPois.m`.
-- Kohn, R. and Villani, M. (2009). A General Approach to Regression Density
-  Estimation using Smooth Mixtures of Over-Dispersed Models.
-  Cited in model log-posterior and gradient/Hessian files, including
-  `../MatlabCode/models/heteroGauss/HeteroGaussLogPost.m`.
-- Villani, M., Kohn, R. and Giordani, P. (2008). Regression Density Estimation
-  using Smooth Adaptive Gaussian Mixtures.
-  Cited in Newton proposal and gradient/Hessian files as an earlier working
-  paper style reference.
 - Li, F., Villani, M. and Kohn, R. (2010). Flexible modeling of conditional
   distributions using smooth mixtures of asymmetric Student t densities. Journal
   of Statistical Planning and Inference, 140(12), 3638-3654.
   https://doi.org/10.1016/j.jspi.2010.04.031.
-  This appears as an incomplete JSPI citation in `../MatlabCode/GSM.m`,
-  `../MatlabCode/GSM4Sim.m`, and `../MatlabCode/GSMWithEstLink.m`.
-- Li, F., Villani, M. and Kohn, R. (2009).
-  This appears as an incomplete citation in `../MatlabCode/PriorPredGSM.m`.
+- Villani, M., Kohn, R. and Giordani, P. (2009). Regression Density Estimation
+  using Smooth Adaptive Gaussian Mixtures, Journal of Econometrics.
+- Kohn, R. and Villani, M. (2009). A General Approach to Regression Density
+  Estimation using Smooth Mixtures of Over-Dispersed Models.
+- Villani, M., Kohn, R. and Giordani, P. (2008). Regression Density Estimation
+  using Smooth Adaptive Gaussian Mixtures.
 
 ## Basic API
 
@@ -216,24 +191,3 @@ The default Gaussian mixture script uses:
 ```text
 data/sp500_1990-2009_calendar.csv
 ```
-
-The CSV includes calendar dates converted from the original MATLAB decimal date
-format. The constant/intercept column is not stored in the CSV; it is inserted by
-the loader when `add_constant=True`.
-
-## Current Scope
-
-This package does not yet implement full GSMMatlab parity. Missing or incomplete
-areas include:
-
-- MATLAB-style g-priors and link-scale prior conversion.
-- Structured/block Gaussian variational families.
-- Posterior inclusion probabilities beyond ARD shrinkage.
-- Spline basis construction.
-- MATLAB `orderly`, `systematic`, and `random` cross-validation parity.
-- Predictive CDF, PIT residuals, normalized residual diagnostics, and LPDS NSE.
-- Parity fixtures comparing Python outputs directly against saved MATLAB runs.
-
-The next migration step should be adding MATLAB-compatible prior construction for
-the Gaussian mixture before extending the same VI and evaluation pattern to other
-GSM families.
