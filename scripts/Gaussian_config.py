@@ -72,6 +72,9 @@ FIT = FitConfig(
     use_ard=False,
     ard_shape=1e-2,
     ard_rate=1e-2,
+    n_elbo_samples=8,
+    n_predictive_samples=100,
+    posterior_init_log_std=-5.0,
 )
 
 

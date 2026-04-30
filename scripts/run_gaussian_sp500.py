@@ -32,6 +32,13 @@ def main() -> None:
     )
     parser.add_argument("--ard-shape", type=float, default=FIT.ard_shape)
     parser.add_argument("--ard-rate", type=float, default=FIT.ard_rate)
+    parser.add_argument("--elbo-samples", type=int, default=FIT.n_elbo_samples)
+    parser.add_argument("--predictive-samples", type=int, default=FIT.n_predictive_samples)
+    parser.add_argument(
+        "--posterior-init-log-std",
+        type=float,
+        default=FIT.posterior_init_log_std,
+    )
     parser.add_argument(
         "--holdout-fraction",
         type=float,
@@ -50,6 +57,9 @@ def main() -> None:
         use_ard=args.ard,
         ard_shape=args.ard_shape,
         ard_rate=args.ard_rate,
+        n_elbo_samples=args.elbo_samples,
+        n_predictive_samples=args.predictive_samples,
+        posterior_init_log_std=args.posterior_init_log_std,
     )
     if args.holdout_fraction:
         heldout = fit_heldout_gaussian_mixture_lpds(
@@ -64,6 +74,8 @@ def main() -> None:
         print(f"test rows: {heldout.test_indices.shape[0]}")
         print(f"components: {MODEL.n_components}")
         print(f"ard: {fit.use_ard}")
+        print(f"elbo samples: {fit.n_elbo_samples}")
+        print(f"predictive samples: {heldout.test_score.n_posterior_samples}")
         print(f"iterations: {len(result.elbo_history)}")
         print(f"converged: {result.converged}")
         print(f"initial objective: {result.elbo_history[0]:.6f}")
@@ -78,6 +90,7 @@ def main() -> None:
     print(f"rows: {dataset.y.shape[0]}")
     print(f"components: {MODEL.n_components}")
     print(f"ard: {fit.use_ard}")
+    print(f"elbo samples: {fit.n_elbo_samples}")
     print(f"iterations: {len(result.elbo_history)}")
     print(f"converged: {result.converged}")
     print(f"initial objective: {result.elbo_history[0]:.6f}")

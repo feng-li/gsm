@@ -2,9 +2,9 @@
 
 The first inference path uses a collapsed-responsibility objective: allocations
 are integrated out through ``logsumexp`` and the coefficient variational family
-is currently a point mass. This is intentionally modest, but it gives us the
-right API surface for replacing the old MATLAB Metropolis-Hastings/Newton path
-with an ELBO-style JAX optimization loop.
+is a diagonal Gaussian. This is intentionally modest, but it gives us the right
+API surface for replacing the old MATLAB Metropolis-Hastings/Newton path with an
+ELBO-style JAX optimization loop.
 """
 
 from dataclasses import dataclass
@@ -44,10 +44,19 @@ class GaussianMixtureStandardization:
 
 
 @dataclass(frozen=True)
+class GaussianMixturePosterior:
+    """Mean-field Gaussian posterior over Gaussian-mixture coefficients."""
+
+    mean: GaussianMixtureParams
+    log_std: GaussianMixtureParams
+
+
+@dataclass(frozen=True)
 class VariationalResult:
     params: Any
     elbo_history: np.ndarray
     converged: bool
+    posterior: GaussianMixturePosterior | None = None
     responsibilities: np.ndarray | None = None
     predictive_mean: np.ndarray | None = None
     predictive_variance: np.ndarray | None = None
@@ -140,11 +149,35 @@ def initialize_gaussian_mixture_params(
     }
 
 
+def initialize_gaussian_mixture_variational_params(
+    inputs: GaussianMixtureInputs,
+    setting: GaussianMixtureSetting,
+    init_log_std: float = -5.0,
+) -> dict[str, dict[str, jnp.ndarray]]:
+    """Initialize a diagonal Gaussian variational family."""
+
+    mean_tree = initialize_gaussian_mixture_params(inputs, setting)
+    log_std_tree = jax.tree_util.tree_map(
+        lambda value: jnp.full_like(value, init_log_std),
+        mean_tree,
+    )
+    return {"mean": mean_tree, "log_std": log_std_tree}
+
+
 def tree_to_gaussian_params(tree: dict[str, jnp.ndarray]) -> GaussianMixtureParams:
     return GaussianMixtureParams(
         mean_coef=tree["mean_coef"],
         log_variance_coef=tree["log_variance_coef"],
         gating_coef=tree["gating_coef"],
+    )
+
+
+def tree_to_gaussian_posterior(
+    tree: dict[str, dict[str, jnp.ndarray]],
+) -> GaussianMixturePosterior:
+    return GaussianMixturePosterior(
+        mean=tree_to_gaussian_params(tree["mean"]),
+        log_std=tree_to_gaussian_params(tree["log_std"]),
     )
 
 
@@ -194,6 +227,52 @@ def gaussian_mixture_elbo(
     return log_likelihood + log_prior
 
 
+def gaussian_mixture_variational_elbo(
+    variational_tree: dict[str, dict[str, jnp.ndarray]],
+    inputs: GaussianMixtureInputs,
+    noise_tree: dict[str, jnp.ndarray],
+    coefficient_prior_scale: float = 10.0,
+    use_ard: bool = False,
+    ard_shape: float = 1e-2,
+    ard_rate: float = 1e-2,
+) -> jnp.ndarray:
+    """Monte Carlo ELBO for a diagonal Gaussian variational posterior."""
+
+    sample_tree = _sample_param_trees(
+        variational_tree["mean"],
+        variational_tree["log_std"],
+        noise_tree,
+    )
+
+    def sample_log_joint(param_tree):
+        return gaussian_mixture_elbo(
+            param_tree,
+            inputs,
+            coefficient_prior_scale=coefficient_prior_scale,
+            use_ard=use_ard,
+            ard_shape=ard_shape,
+            ard_rate=ard_rate,
+        )
+
+    log_joint = jax.vmap(sample_log_joint)(sample_tree)
+    return jnp.mean(log_joint) + _mean_field_gaussian_entropy(variational_tree["log_std"])
+
+
+def sample_gaussian_mixture_posterior(
+    posterior: GaussianMixturePosterior,
+    seed: int,
+    n_samples: int,
+) -> dict[str, jnp.ndarray]:
+    """Draw coefficient trees from a fitted mean-field Gaussian posterior."""
+
+    if n_samples < 1:
+        raise ValueError("n_samples must be positive")
+    mean_tree = _gaussian_params_to_tree(posterior.mean)
+    log_std_tree = _gaussian_params_to_tree(posterior.log_std)
+    noise_tree = _sample_noise_like(mean_tree, jax.random.PRNGKey(seed), n_samples)
+    return _sample_param_trees(mean_tree, log_std_tree, noise_tree)
+
+
 def fit_gaussian_mixture_vb(
     dataset: Dataset,
     setting: GaussianMixtureSetting,
@@ -202,18 +281,35 @@ def fit_gaussian_mixture_vb(
     """Fit the Gaussian mixture scaffold with JAX gradients and local Adam."""
 
     fit = fit or FitConfig()
+    if fit.n_elbo_samples < 1:
+        raise ValueError("n_elbo_samples must be positive")
+
     inputs = prepare_gaussian_mixture_inputs(dataset, setting)
     best_result: VariationalResult | None = None
 
     for restart in range(fit.n_restarts):
-        params = initialize_gaussian_mixture_params(inputs, setting)
+        variational_params = initialize_gaussian_mixture_variational_params(
+            inputs,
+            setting,
+            init_log_std=fit.posterior_init_log_std,
+        )
         if restart:
-            params = _jitter_params(params, fit.seed + restart)
-        params, history, converged = _optax_maximize(
-            params,
-            lambda p: gaussian_mixture_elbo(
-                p,
+            variational_params["mean"] = _jitter_params(
+                variational_params["mean"],
+                fit.seed + restart,
+            )
+
+        noise_tree = _sample_noise_like(
+            variational_params["mean"],
+            jax.random.PRNGKey(fit.seed + 1009 * (restart + 1)),
+            fit.n_elbo_samples,
+        )
+        variational_params, history, converged = _optax_maximize(
+            variational_params,
+            lambda q: gaussian_mixture_variational_elbo(
+                q,
                 inputs,
+                noise_tree,
                 coefficient_prior_scale=fit.coefficient_prior_scale,
                 use_ard=fit.use_ard,
                 ard_shape=fit.ard_shape,
@@ -223,7 +319,7 @@ def fit_gaussian_mixture_vb(
             learning_rate=fit.learning_rate,
             tol=fit.tol,
         )
-        result = _build_result(params, inputs, history, converged)
+        result = _build_variational_result(variational_params, inputs, history, converged)
         if best_result is None or result.elbo_history[-1] > best_result.elbo_history[-1]:
             best_result = result
 
@@ -245,12 +341,12 @@ def fit_variational(
 
 
 def _optax_maximize(
-    params: dict[str, jnp.ndarray],
+    params,
     objective,
     max_iter: int,
     learning_rate: float,
     tol: float,
-) -> tuple[dict[str, jnp.ndarray], np.ndarray, bool]:
+):
     loss_and_grad = jax.value_and_grad(lambda p: -objective(p))
     optimizer = optax.adam(learning_rate)
     opt_state = optimizer.init(params)
@@ -268,6 +364,49 @@ def _optax_maximize(
         params = optax.apply_updates(params, updates)
 
     return params, np.asarray(history), converged
+
+
+def _gaussian_params_to_tree(params: GaussianMixtureParams) -> dict[str, jnp.ndarray]:
+    return {
+        "mean_coef": params.mean_coef,
+        "log_variance_coef": params.log_variance_coef,
+        "gating_coef": params.gating_coef,
+    }
+
+
+def _sample_noise_like(
+    param_tree: dict[str, jnp.ndarray],
+    key,
+    n_samples: int,
+) -> dict[str, jnp.ndarray]:
+    leaves, tree_def = jax.tree_util.tree_flatten(param_tree)
+    keys = jax.random.split(key, len(leaves))
+    noise_leaves = [
+        jax.random.normal(sample_key, (n_samples, *leaf.shape), dtype=leaf.dtype)
+        for sample_key, leaf in zip(keys, leaves)
+    ]
+    return jax.tree_util.tree_unflatten(tree_def, noise_leaves)
+
+
+def _sample_param_trees(
+    mean_tree: dict[str, jnp.ndarray],
+    log_std_tree: dict[str, jnp.ndarray],
+    noise_tree: dict[str, jnp.ndarray],
+) -> dict[str, jnp.ndarray]:
+    return jax.tree_util.tree_map(
+        lambda mean, log_std, noise: mean + jnp.exp(log_std) * noise,
+        mean_tree,
+        log_std_tree,
+        noise_tree,
+    )
+
+
+def _mean_field_gaussian_entropy(log_std_tree: dict[str, jnp.ndarray]) -> jnp.ndarray:
+    log_two_pi_e = jnp.log(2.0 * jnp.pi * jnp.e)
+    return sum(
+        jnp.sum(log_std + 0.5 * log_two_pi_e)
+        for log_std in jax.tree_util.tree_leaves(log_std_tree)
+    )
 
 
 def _raw_gaussian_mixture_designs(
@@ -373,6 +512,30 @@ def _build_result(
     pred_mean, pred_var = predict_mean_variance(params, X_mean, X_variance, Z)
     return VariationalResult(
         params=params,
+        elbo_history=history,
+        converged=converged,
+        responsibilities=np.asarray(resp),
+        predictive_mean=np.asarray(pred_mean),
+        predictive_variance=np.asarray(pred_var),
+    )
+
+
+def _build_variational_result(
+    variational_tree: dict[str, dict[str, jnp.ndarray]],
+    inputs: GaussianMixtureInputs,
+    history: np.ndarray,
+    converged: bool,
+) -> VariationalResult:
+    posterior = tree_to_gaussian_posterior(variational_tree)
+    y = jnp.asarray(inputs.y)
+    X_mean = jnp.asarray(inputs.X_mean)
+    X_variance = jnp.asarray(inputs.X_variance)
+    Z = jnp.asarray(inputs.Z)
+    resp = gaussian_responsibilities(posterior.mean, y, X_mean, X_variance, Z)
+    pred_mean, pred_var = predict_mean_variance(posterior.mean, X_mean, X_variance, Z)
+    return VariationalResult(
+        params=posterior.mean,
+        posterior=posterior,
         elbo_history=history,
         converged=converged,
         responsibilities=np.asarray(resp),
