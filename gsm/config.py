@@ -33,6 +33,10 @@ class FitConfig:
     learning_rate: float = 1e-2
     n_restarts: int = 3
     tol: float = 1e-6
+    coefficient_prior_scale: float = 10.0
+    use_ard: bool = False
+    ard_shape: float = 1e-2
+    ard_rate: float = 1e-2
 
 
 @dataclass(frozen=True)

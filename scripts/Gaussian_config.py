@@ -68,6 +68,10 @@ FIT = FitConfig(
     learning_rate=1e-2,
     n_restarts=3,
     tol=1e-6,
+    coefficient_prior_scale=10.0,
+    use_ard=False,
+    ard_shape=1e-2,
+    ard_rate=1e-2,
 )
 
 

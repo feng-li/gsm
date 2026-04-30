@@ -6,6 +6,7 @@ This folder is the starting point for the Python migration. It is intentionally 
 - `gsm/links.py` contains JAX-compatible link and inverse-link functions.
 - `gsm/models/` starts model-specific log-probability kernels.
 - `gsm/variational.py` is the future variational Bayes entry point.
+- `FitConfig(use_ard=True)` enables the first ARD shrinkage option for non-constant covariates.
 
 The first target is not feature parity with the full MATLAB repository. The first target is one
 small VB path that can load existing data, evaluate model kernels, optimize an ELBO, and produce
@@ -18,4 +19,3 @@ cd PythonCode
 python -m pip install -e ".[dev]"
 pytest
 ```
-

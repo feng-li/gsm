@@ -103,8 +103,11 @@ def gaussian_mixture_elbo(
     param_tree: dict[str, jnp.ndarray],
     inputs: GaussianMixtureInputs,
     coefficient_prior_scale: float = 10.0,
+    use_ard: bool = False,
+    ard_shape: float = 1e-2,
+    ard_rate: float = 1e-2,
 ) -> jnp.ndarray:
-    """Collapsed-allocation ELBO with Gaussian coefficient shrinkage."""
+    """Collapsed-allocation ELBO with optional ARD coefficient shrinkage."""
 
     params = tree_to_gaussian_params(param_tree)
     y = jnp.asarray(inputs.y)
@@ -113,8 +116,31 @@ def gaussian_mixture_elbo(
     Z = jnp.asarray(inputs.Z)
 
     log_likelihood = gaussian_log_prob(params, y, X_mean, X_variance, Z)
-    log_prior = -0.5 * sum(
-        jnp.sum((value / coefficient_prior_scale) ** 2) for value in param_tree.values()
+    log_prior = (
+        _coefficient_log_prior(
+            param_tree["mean_coef"],
+            inputs.X_mean,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+        )
+        + _coefficient_log_prior(
+            param_tree["log_variance_coef"],
+            inputs.X_variance,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+        )
+        + _coefficient_log_prior(
+            param_tree["gating_coef"],
+            inputs.Z,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+        )
     )
     return log_likelihood + log_prior
 
@@ -136,7 +162,14 @@ def fit_gaussian_mixture_vb(
             params = _jitter_params(params, fit.seed + restart)
         params, history, converged = _optax_maximize(
             params,
-            lambda p: gaussian_mixture_elbo(p, inputs),
+            lambda p: gaussian_mixture_elbo(
+                p,
+                inputs,
+                coefficient_prior_scale=fit.coefficient_prior_scale,
+                use_ard=fit.use_ard,
+                ard_shape=fit.ard_shape,
+                ard_rate=fit.ard_rate,
+            ),
             max_iter=fit.max_iter,
             learning_rate=fit.learning_rate,
             tol=fit.tol,
@@ -186,6 +219,52 @@ def _optax_maximize(
         params = optax.apply_updates(params, updates)
 
     return params, np.asarray(history), converged
+
+
+def _coefficient_log_prior(
+    value: jnp.ndarray,
+    design_matrix: np.ndarray,
+    coefficient_prior_scale: float,
+    use_ard: bool,
+    ard_shape: float,
+    ard_rate: float,
+) -> jnp.ndarray:
+    if coefficient_prior_scale <= 0:
+        raise ValueError("coefficient_prior_scale must be positive")
+    if not use_ard:
+        return -0.5 * jnp.sum((value / coefficient_prior_scale) ** 2)
+    if ard_shape <= 0 or ard_rate <= 0:
+        raise ValueError("ard_shape and ard_rate must be positive")
+    if value.size == 0:
+        return jnp.asarray(0.0, dtype=value.dtype)
+
+    constant_mask = _constant_column_mask(design_matrix)
+    if constant_mask.shape[0] != value.shape[-1]:
+        raise ValueError("design matrix and coefficient matrix column counts differ")
+
+    constant_weights = jnp.asarray(constant_mask, dtype=value.dtype)
+    constant_prior = -0.5 * jnp.sum(
+        ((value / coefficient_prior_scale) ** 2) * constant_weights
+    )
+
+    column_squares = jnp.sum(value**2, axis=0)
+    group_size = value.shape[0]
+    nonconstant_weights = 1.0 - constant_weights
+    ard_prior = -jnp.sum(
+        nonconstant_weights
+        * (ard_shape + 0.5 * group_size)
+        * jnp.log(ard_rate + 0.5 * column_squares)
+    )
+    return constant_prior + ard_prior
+
+
+def _constant_column_mask(design_matrix: np.ndarray) -> np.ndarray:
+    X = np.asarray(design_matrix, dtype=float)
+    if X.ndim != 2:
+        raise ValueError("design matrix must be 2D")
+    if X.shape[0] == 0:
+        return np.zeros(X.shape[1], dtype=bool)
+    return np.all(np.isclose(X, X[:1, :]), axis=0)
 
 
 def _build_result(

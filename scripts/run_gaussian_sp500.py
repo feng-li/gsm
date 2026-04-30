@@ -18,6 +18,19 @@ def main() -> None:
     parser.add_argument("--max-iter", type=int, default=200)
     parser.add_argument("--learning-rate", type=float, default=FIT.learning_rate)
     parser.add_argument("--restarts", type=int, default=1)
+    parser.add_argument(
+        "--coefficient-prior-scale",
+        type=float,
+        default=FIT.coefficient_prior_scale,
+    )
+    parser.add_argument(
+        "--ard",
+        action="store_true",
+        default=FIT.use_ard,
+        help="use ARD shrinkage for non-constant covariates",
+    )
+    parser.add_argument("--ard-shape", type=float, default=FIT.ard_shape)
+    parser.add_argument("--ard-rate", type=float, default=FIT.ard_rate)
     args = parser.parse_args()
 
     dataset = load_default_dataset()
@@ -26,11 +39,16 @@ def main() -> None:
         max_iter=args.max_iter,
         learning_rate=args.learning_rate,
         n_restarts=args.restarts,
+        coefficient_prior_scale=args.coefficient_prior_scale,
+        use_ard=args.ard,
+        ard_shape=args.ard_shape,
+        ard_rate=args.ard_rate,
     )
     result = fit_variational(dataset, MODEL, fit)
 
     print(f"rows: {dataset.y.shape[0]}")
     print(f"components: {MODEL.n_components}")
+    print(f"ard: {fit.use_ard}")
     print(f"iterations: {len(result.elbo_history)}")
     print(f"converged: {result.converged}")
     print(f"initial objective: {result.elbo_history[0]:.6f}")
@@ -39,4 +57,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
