@@ -113,6 +113,37 @@ class SplitTMixtureSetting:
     prior_inclusion_mix: float = 0.5
 
 
+@dataclass(frozen=True)
+class SplitNormalMixtureSetting:
+    """Minimal Python version of MATLAB's asymmetric normal GSM setting."""
+
+    model_name: str = "SplitNormal"
+    data_file_name: str = "sp500_1990-2009_calendar.csv"
+    feature_names: tuple[str, str, str] = ("Mean", "Sigma", "Skewness")
+    link_types: tuple[str, str, str] = ("identity", "log", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]] = (
+        (0,),
+        tuple(range(10)),
+        tuple(range(10)),
+    )
+    covs_mix: tuple[int, ...] = tuple(range(10))
+    on_trial: tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]] = (
+        (),
+        tuple(range(1, 10)),
+        tuple(range(1, 10)),
+    )
+    on_trial_mix: tuple[int, ...] = tuple(range(1, 10))
+    add_constant: bool = True
+    n_components: int = 1
+    standardize: int = 2
+    prior_mean_feat: tuple[float, float, float] = (0.0, 1.0, math.sqrt(0.8))
+    prior_std_feat: tuple[float, float, float] = (10.0, 1.0, 1.0)
+    prior_shrink: tuple[float | str, float | str, float | str] = (100.0, 100.0, 100.0)
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float, float, float] = (0.5, 0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+
+
 def hetero_gaussian_setting(n_components: int = 2) -> GaussianMixtureSetting:
     """Return the default HeteroGauss setting with an adjustable component count."""
 
@@ -142,3 +173,9 @@ def sp500_splitt_mixture_setting(n_components: int = 3) -> SplitTMixtureSetting:
     """Split-t mixture setting for ``sp500_1990-2009_calendar.csv``."""
 
     return SplitTMixtureSetting(n_components=n_components)
+
+
+def sp500_splitnormal_mixture_setting(n_components: int = 1) -> SplitNormalMixtureSetting:
+    """Split-normal mixture setting for ``sp500_1990-2009_calendar.csv``."""
+
+    return SplitNormalMixtureSetting(n_components=n_components)

@@ -15,13 +15,25 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from .config import FitConfig, GaussianMixtureSetting, ModelConfig, SplitTMixtureSetting
+from .config import (
+    FitConfig,
+    GaussianMixtureSetting,
+    ModelConfig,
+    SplitNormalMixtureSetting,
+    SplitTMixtureSetting,
+)
 from .data import Dataset, standardize_covariates
 from .models.gaussian_mixture import (
     GaussianMixtureParams,
     log_prob as gaussian_log_prob,
     predict_mean_variance,
     responsibilities as gaussian_responsibilities,
+)
+from .models.splitnormal import (
+    SplitNormalMixtureParams,
+    log_prob as splitnormal_log_prob,
+    predict_mean_variance as splitnormal_predict_mean_variance,
+    responsibilities as splitnormal_responsibilities,
 )
 from .models.splitt import (
     SplitTMixtureParams,
@@ -31,8 +43,10 @@ from .models.splitt import (
 )
 from .priors import (
     GaussianMixtureCoefficientPriors,
+    SplitNormalMixtureCoefficientPriors,
     SplitTMixtureCoefficientPriors,
     build_gaussian_mixture_priors,
+    build_splitnormal_mixture_priors,
     build_splitt_mixture_priors,
     coefficient_log_prior,
 )
@@ -57,11 +71,46 @@ class SplitTMixtureInputs:
 
 
 @dataclass(frozen=True)
+class SplitNormalMixtureInputs:
+    y: np.ndarray
+    X_mean: np.ndarray
+    X_scale: np.ndarray
+    X_skewness: np.ndarray
+    Z: np.ndarray
+
+
+@dataclass(frozen=True)
 class GaussianMixtureStandardization:
     X_mean_c1: np.ndarray
     X_mean_c2: np.ndarray
     X_variance_c1: np.ndarray
     X_variance_c2: np.ndarray
+    Z_c1: np.ndarray
+    Z_c2: np.ndarray
+
+
+@dataclass(frozen=True)
+class SplitTMixtureStandardization:
+    X_mean_c1: np.ndarray
+    X_mean_c2: np.ndarray
+    X_df_c1: np.ndarray
+    X_df_c2: np.ndarray
+    X_scale_c1: np.ndarray
+    X_scale_c2: np.ndarray
+    X_skewness_c1: np.ndarray
+    X_skewness_c2: np.ndarray
+    Z_c1: np.ndarray
+    Z_c2: np.ndarray
+
+
+@dataclass(frozen=True)
+class SplitNormalMixtureStandardization:
+    X_mean_c1: np.ndarray
+    X_mean_c2: np.ndarray
+    X_scale_c1: np.ndarray
+    X_scale_c2: np.ndarray
+    X_skewness_c1: np.ndarray
+    X_skewness_c2: np.ndarray
     Z_c1: np.ndarray
     Z_c2: np.ndarray
 
@@ -80,6 +129,14 @@ class SplitTMixturePosterior:
 
     mean: SplitTMixtureParams
     log_std: SplitTMixtureParams
+
+
+@dataclass(frozen=True)
+class SplitNormalMixturePosterior:
+    """Mean-field Gaussian posterior over split-normal mixture coefficients."""
+
+    mean: SplitNormalMixtureParams
+    log_std: SplitNormalMixtureParams
 
 
 @dataclass(frozen=True)
@@ -138,21 +195,103 @@ def prepare_gaussian_mixture_inputs(
 def prepare_splitt_mixture_inputs(
     dataset: Dataset,
     setting: SplitTMixtureSetting,
+    standardization: SplitTMixtureStandardization | None = None,
 ) -> SplitTMixtureInputs:
     """Build feature-specific design matrices for the split-t mixture."""
 
     X_mean, X_df, X_scale, X_skewness, Z = _raw_splitt_mixture_designs(dataset, setting)
     if setting.standardize:
-        X_mean, _, _ = standardize_covariates(X_mean, setting.standardize)
-        X_df, _, _ = standardize_covariates(X_df, setting.standardize)
-        X_scale, _, _ = standardize_covariates(X_scale, setting.standardize)
-        X_skewness, _, _ = standardize_covariates(X_skewness, setting.standardize)
-        Z, _, _ = standardize_covariates(Z, setting.standardize)
+        if standardization is None:
+            X_mean, _, _ = standardize_covariates(X_mean, setting.standardize)
+            X_df, _, _ = standardize_covariates(X_df, setting.standardize)
+            X_scale, _, _ = standardize_covariates(X_scale, setting.standardize)
+            X_skewness, _, _ = standardize_covariates(X_skewness, setting.standardize)
+            Z, _, _ = standardize_covariates(Z, setting.standardize)
+        else:
+            X_mean = _apply_standardization(
+                X_mean,
+                setting.standardize,
+                standardization.X_mean_c1,
+                standardization.X_mean_c2,
+            )
+            X_df = _apply_standardization(
+                X_df,
+                setting.standardize,
+                standardization.X_df_c1,
+                standardization.X_df_c2,
+            )
+            X_scale = _apply_standardization(
+                X_scale,
+                setting.standardize,
+                standardization.X_scale_c1,
+                standardization.X_scale_c2,
+            )
+            X_skewness = _apply_standardization(
+                X_skewness,
+                setting.standardize,
+                standardization.X_skewness_c1,
+                standardization.X_skewness_c2,
+            )
+            Z = _apply_standardization(
+                Z,
+                setting.standardize,
+                standardization.Z_c1,
+                standardization.Z_c2,
+            )
 
     return SplitTMixtureInputs(
         y=dataset.y.reshape(-1),
         X_mean=X_mean,
         X_df=X_df,
+        X_scale=X_scale,
+        X_skewness=X_skewness,
+        Z=Z,
+    )
+
+
+def prepare_splitnormal_mixture_inputs(
+    dataset: Dataset,
+    setting: SplitNormalMixtureSetting,
+    standardization: SplitNormalMixtureStandardization | None = None,
+) -> SplitNormalMixtureInputs:
+    """Build feature-specific design matrices for the split-normal mixture."""
+
+    X_mean, X_scale, X_skewness, Z = _raw_splitnormal_mixture_designs(dataset, setting)
+    if setting.standardize:
+        if standardization is None:
+            X_mean, _, _ = standardize_covariates(X_mean, setting.standardize)
+            X_scale, _, _ = standardize_covariates(X_scale, setting.standardize)
+            X_skewness, _, _ = standardize_covariates(X_skewness, setting.standardize)
+            Z, _, _ = standardize_covariates(Z, setting.standardize)
+        else:
+            X_mean = _apply_standardization(
+                X_mean,
+                setting.standardize,
+                standardization.X_mean_c1,
+                standardization.X_mean_c2,
+            )
+            X_scale = _apply_standardization(
+                X_scale,
+                setting.standardize,
+                standardization.X_scale_c1,
+                standardization.X_scale_c2,
+            )
+            X_skewness = _apply_standardization(
+                X_skewness,
+                setting.standardize,
+                standardization.X_skewness_c1,
+                standardization.X_skewness_c2,
+            )
+            Z = _apply_standardization(
+                Z,
+                setting.standardize,
+                standardization.Z_c1,
+                standardization.Z_c2,
+            )
+
+    return SplitNormalMixtureInputs(
+        y=dataset.y.reshape(-1),
+        X_mean=X_mean,
         X_scale=X_scale,
         X_skewness=X_skewness,
         Z=Z,
@@ -174,6 +313,61 @@ def fit_gaussian_mixture_standardization(
         X_mean_c2=X_mean_c2,
         X_variance_c1=X_variance_c1,
         X_variance_c2=X_variance_c2,
+        Z_c1=Z_c1,
+        Z_c2=Z_c2,
+    )
+
+
+def fit_splitt_mixture_standardization(
+    dataset: Dataset,
+    setting: SplitTMixtureSetting,
+) -> SplitTMixtureStandardization:
+    """Fit the split-t model-specific scaling constants."""
+
+    X_mean, X_df, X_scale, X_skewness, Z = _raw_splitt_mixture_designs(dataset, setting)
+    _, X_mean_c1, X_mean_c2 = standardize_covariates(X_mean, setting.standardize)
+    _, X_df_c1, X_df_c2 = standardize_covariates(X_df, setting.standardize)
+    _, X_scale_c1, X_scale_c2 = standardize_covariates(X_scale, setting.standardize)
+    _, X_skewness_c1, X_skewness_c2 = standardize_covariates(
+        X_skewness,
+        setting.standardize,
+    )
+    _, Z_c1, Z_c2 = standardize_covariates(Z, setting.standardize)
+    return SplitTMixtureStandardization(
+        X_mean_c1=X_mean_c1,
+        X_mean_c2=X_mean_c2,
+        X_df_c1=X_df_c1,
+        X_df_c2=X_df_c2,
+        X_scale_c1=X_scale_c1,
+        X_scale_c2=X_scale_c2,
+        X_skewness_c1=X_skewness_c1,
+        X_skewness_c2=X_skewness_c2,
+        Z_c1=Z_c1,
+        Z_c2=Z_c2,
+    )
+
+
+def fit_splitnormal_mixture_standardization(
+    dataset: Dataset,
+    setting: SplitNormalMixtureSetting,
+) -> SplitNormalMixtureStandardization:
+    """Fit the split-normal model-specific scaling constants."""
+
+    X_mean, X_scale, X_skewness, Z = _raw_splitnormal_mixture_designs(dataset, setting)
+    _, X_mean_c1, X_mean_c2 = standardize_covariates(X_mean, setting.standardize)
+    _, X_scale_c1, X_scale_c2 = standardize_covariates(X_scale, setting.standardize)
+    _, X_skewness_c1, X_skewness_c2 = standardize_covariates(
+        X_skewness,
+        setting.standardize,
+    )
+    _, Z_c1, Z_c2 = standardize_covariates(Z, setting.standardize)
+    return SplitNormalMixtureStandardization(
+        X_mean_c1=X_mean_c1,
+        X_mean_c2=X_mean_c2,
+        X_scale_c1=X_scale_c1,
+        X_scale_c2=X_scale_c2,
+        X_skewness_c1=X_skewness_c1,
+        X_skewness_c2=X_skewness_c2,
         Z_c1=Z_c1,
         Z_c2=Z_c2,
     )
@@ -264,6 +458,48 @@ def initialize_splitt_mixture_variational_params(
     return {"mean": mean_tree, "log_std": log_std_tree}
 
 
+def initialize_splitnormal_mixture_params(
+    inputs: SplitNormalMixtureInputs,
+    setting: SplitNormalMixtureSetting,
+) -> dict[str, jnp.ndarray]:
+    """Deterministic initialization for the split-normal VB optimizer."""
+
+    y = np.asarray(inputs.y)
+    n_components = setting.n_components
+    quantiles = np.linspace(0.15, 0.85, n_components)
+    means = np.quantile(y, quantiles)
+    scale = max(float(np.std(y, ddof=1)), 1e-3)
+
+    mean_coef = np.zeros((n_components, inputs.X_mean.shape[1]))
+    mean_coef[:, 0] = means
+    scale_coef = np.zeros((n_components, inputs.X_scale.shape[1]))
+    scale_coef[:, 0] = np.log(scale)
+    skewness_coef = np.zeros((n_components, inputs.X_skewness.shape[1]))
+    gating_coef = np.zeros((max(n_components - 1, 0), inputs.Z.shape[1]))
+
+    return {
+        "mean_coef": jnp.asarray(mean_coef),
+        "scale_coef": jnp.asarray(scale_coef),
+        "skewness_coef": jnp.asarray(skewness_coef),
+        "gating_coef": jnp.asarray(gating_coef),
+    }
+
+
+def initialize_splitnormal_mixture_variational_params(
+    inputs: SplitNormalMixtureInputs,
+    setting: SplitNormalMixtureSetting,
+    init_log_std: float = -5.0,
+) -> dict[str, dict[str, jnp.ndarray]]:
+    """Initialize a diagonal Gaussian variational family for split-normal mixtures."""
+
+    mean_tree = initialize_splitnormal_mixture_params(inputs, setting)
+    log_std_tree = jax.tree_util.tree_map(
+        lambda value: jnp.full_like(value, init_log_std),
+        mean_tree,
+    )
+    return {"mean": mean_tree, "log_std": log_std_tree}
+
+
 def tree_to_gaussian_params(tree: dict[str, jnp.ndarray]) -> GaussianMixtureParams:
     return GaussianMixtureParams(
         mean_coef=tree["mean_coef"],
@@ -297,6 +533,24 @@ def tree_to_splitt_posterior(
     return SplitTMixturePosterior(
         mean=tree_to_splitt_params(tree["mean"]),
         log_std=tree_to_splitt_params(tree["log_std"]),
+    )
+
+
+def tree_to_splitnormal_params(tree: dict[str, jnp.ndarray]) -> SplitNormalMixtureParams:
+    return SplitNormalMixtureParams(
+        mean_coef=tree["mean_coef"],
+        scale_coef=tree["scale_coef"],
+        skewness_coef=tree["skewness_coef"],
+        gating_coef=tree["gating_coef"],
+    )
+
+
+def tree_to_splitnormal_posterior(
+    tree: dict[str, dict[str, jnp.ndarray]],
+) -> SplitNormalMixturePosterior:
+    return SplitNormalMixturePosterior(
+        mean=tree_to_splitnormal_params(tree["mean"]),
+        log_std=tree_to_splitnormal_params(tree["log_std"]),
     )
 
 
@@ -486,6 +740,99 @@ def splitt_mixture_variational_elbo(
     return jnp.mean(log_joint) + _mean_field_gaussian_entropy(variational_tree["log_std"])
 
 
+def splitnormal_mixture_elbo(
+    param_tree: dict[str, jnp.ndarray],
+    inputs: SplitNormalMixtureInputs,
+    coefficient_prior_scale: float = 10.0,
+    use_ard: bool = False,
+    ard_shape: float = 1e-2,
+    ard_rate: float = 1e-2,
+    coefficient_priors: SplitNormalMixtureCoefficientPriors | None = None,
+) -> jnp.ndarray:
+    """Collapsed-allocation ELBO for the split-normal mixture."""
+
+    params = tree_to_splitnormal_params(param_tree)
+    y = jnp.asarray(inputs.y)
+    X_mean = jnp.asarray(inputs.X_mean)
+    X_scale = jnp.asarray(inputs.X_scale)
+    X_skewness = jnp.asarray(inputs.X_skewness)
+    Z = jnp.asarray(inputs.Z)
+
+    log_likelihood = splitnormal_log_prob(params, y, X_mean, X_scale, X_skewness, Z)
+    log_prior = (
+        coefficient_log_prior(
+            param_tree["mean_coef"],
+            inputs.X_mean,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+            coefficient_priors.mean if coefficient_priors is not None else None,
+        )
+        + coefficient_log_prior(
+            param_tree["scale_coef"],
+            inputs.X_scale,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+            coefficient_priors.scale if coefficient_priors is not None else None,
+        )
+        + coefficient_log_prior(
+            param_tree["skewness_coef"],
+            inputs.X_skewness,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+            coefficient_priors.skewness if coefficient_priors is not None else None,
+        )
+        + coefficient_log_prior(
+            param_tree["gating_coef"],
+            inputs.Z,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+            coefficient_priors.gating if coefficient_priors is not None else None,
+        )
+    )
+    return log_likelihood + log_prior
+
+
+def splitnormal_mixture_variational_elbo(
+    variational_tree: dict[str, dict[str, jnp.ndarray]],
+    inputs: SplitNormalMixtureInputs,
+    noise_tree: dict[str, jnp.ndarray],
+    coefficient_prior_scale: float = 10.0,
+    use_ard: bool = False,
+    ard_shape: float = 1e-2,
+    ard_rate: float = 1e-2,
+    coefficient_priors: SplitNormalMixtureCoefficientPriors | None = None,
+) -> jnp.ndarray:
+    """Monte Carlo ELBO for a split-normal mean-field Gaussian posterior."""
+
+    sample_tree = _sample_param_trees(
+        variational_tree["mean"],
+        variational_tree["log_std"],
+        noise_tree,
+    )
+
+    def sample_log_joint(param_tree):
+        return splitnormal_mixture_elbo(
+            param_tree,
+            inputs,
+            coefficient_prior_scale=coefficient_prior_scale,
+            use_ard=use_ard,
+            ard_shape=ard_shape,
+            ard_rate=ard_rate,
+            coefficient_priors=coefficient_priors,
+        )
+
+    log_joint = jax.vmap(sample_log_joint)(sample_tree)
+    return jnp.mean(log_joint) + _mean_field_gaussian_entropy(variational_tree["log_std"])
+
+
 def sample_gaussian_mixture_posterior(
     posterior: GaussianMixturePosterior,
     seed: int,
@@ -512,6 +859,21 @@ def sample_splitt_mixture_posterior(
         raise ValueError("n_samples must be positive")
     mean_tree = _splitt_params_to_tree(posterior.mean)
     log_std_tree = _splitt_params_to_tree(posterior.log_std)
+    noise_tree = _sample_noise_like(mean_tree, jax.random.PRNGKey(seed), n_samples)
+    return _sample_param_trees(mean_tree, log_std_tree, noise_tree)
+
+
+def sample_splitnormal_mixture_posterior(
+    posterior: SplitNormalMixturePosterior,
+    seed: int,
+    n_samples: int,
+) -> dict[str, jnp.ndarray]:
+    """Draw coefficient trees from a fitted split-normal mean-field posterior."""
+
+    if n_samples < 1:
+        raise ValueError("n_samples must be positive")
+    mean_tree = _splitnormal_params_to_tree(posterior.mean)
+    log_std_tree = _splitnormal_params_to_tree(posterior.log_std)
     noise_tree = _sample_noise_like(mean_tree, jax.random.PRNGKey(seed), n_samples)
     return _sample_param_trees(mean_tree, log_std_tree, noise_tree)
 
@@ -630,15 +992,79 @@ def fit_splitt_mixture_vb(
     return best_result
 
 
+def fit_splitnormal_mixture_vb(
+    dataset: Dataset,
+    setting: SplitNormalMixtureSetting,
+    fit: FitConfig | None = None,
+) -> VariationalResult:
+    """Fit the split-normal mixture scaffold with JAX gradients and local Adam."""
+
+    fit = fit or FitConfig()
+    if fit.n_elbo_samples < 1:
+        raise ValueError("n_elbo_samples must be positive")
+
+    inputs = prepare_splitnormal_mixture_inputs(dataset, setting)
+    coefficient_priors = build_splitnormal_mixture_priors(inputs, setting)
+    best_result: VariationalResult | None = None
+
+    for restart in range(fit.n_restarts):
+        variational_params = initialize_splitnormal_mixture_variational_params(
+            inputs,
+            setting,
+            init_log_std=fit.posterior_init_log_std,
+        )
+        if restart:
+            variational_params["mean"] = _jitter_params(
+                variational_params["mean"],
+                fit.seed + restart,
+            )
+
+        noise_tree = _sample_noise_like(
+            variational_params["mean"],
+            jax.random.PRNGKey(fit.seed + 1009 * (restart + 1)),
+            fit.n_elbo_samples,
+        )
+        variational_params, history, converged = _optax_maximize(
+            variational_params,
+            lambda q: splitnormal_mixture_variational_elbo(
+                q,
+                inputs,
+                noise_tree,
+                coefficient_prior_scale=fit.coefficient_prior_scale,
+                use_ard=fit.use_ard,
+                ard_shape=fit.ard_shape,
+                ard_rate=fit.ard_rate,
+                coefficient_priors=coefficient_priors,
+            ),
+            max_iter=fit.max_iter,
+            learning_rate=fit.learning_rate,
+            tol=fit.tol,
+        )
+        result = _build_splitnormal_variational_result(
+            variational_params,
+            inputs,
+            history,
+            converged,
+        )
+        if best_result is None or result.elbo_history[-1] > best_result.elbo_history[-1]:
+            best_result = result
+
+    if best_result is None:
+        raise RuntimeError("no variational optimization runs were executed")
+    return best_result
+
+
 def fit_variational(
     dataset: Dataset,
-    model: ModelConfig | GaussianMixtureSetting | SplitTMixtureSetting,
+    model: ModelConfig | GaussianMixtureSetting | SplitNormalMixtureSetting | SplitTMixtureSetting,
     fit: FitConfig | None = None,
 ) -> VariationalResult:
     """Dispatch to the available variational inference implementation."""
 
     if isinstance(model, GaussianMixtureSetting):
         return fit_gaussian_mixture_vb(dataset, model, fit)
+    if isinstance(model, SplitNormalMixtureSetting):
+        return fit_splitnormal_mixture_vb(dataset, model, fit)
     if isinstance(model, SplitTMixtureSetting):
         return fit_splitt_mixture_vb(dataset, model, fit)
     raise NotImplementedError(f"no variational implementation for model type {type(model)!r}")
@@ -682,6 +1108,15 @@ def _splitt_params_to_tree(params: SplitTMixtureParams) -> dict[str, jnp.ndarray
     return {
         "mean_coef": params.mean_coef,
         "df_coef": params.df_coef,
+        "scale_coef": params.scale_coef,
+        "skewness_coef": params.skewness_coef,
+        "gating_coef": params.gating_coef,
+    }
+
+
+def _splitnormal_params_to_tree(params: SplitNormalMixtureParams) -> dict[str, jnp.ndarray]:
+    return {
+        "mean_coef": params.mean_coef,
         "scale_coef": params.scale_coef,
         "skewness_coef": params.skewness_coef,
         "gating_coef": params.gating_coef,
@@ -743,6 +1178,18 @@ def _raw_splitt_mixture_designs(
         dataset.X[:, setting.covs[1]],
         dataset.X[:, setting.covs[2]],
         dataset.X[:, setting.covs[3]],
+        dataset.X[:, setting.covs_mix],
+    )
+
+
+def _raw_splitnormal_mixture_designs(
+    dataset: Dataset,
+    setting: SplitNormalMixtureSetting,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    return (
+        dataset.X[:, setting.covs[0]],
+        dataset.X[:, setting.covs[1]],
+        dataset.X[:, setting.covs[2]],
         dataset.X[:, setting.covs_mix],
     )
 
@@ -843,6 +1290,37 @@ def _build_splitt_variational_result(
         posterior.mean,
         X_mean,
         X_df,
+        X_scale,
+        X_skewness,
+        Z,
+    )
+    return VariationalResult(
+        params=posterior.mean,
+        posterior=posterior,
+        elbo_history=history,
+        converged=converged,
+        responsibilities=np.asarray(resp),
+        predictive_mean=np.asarray(pred_mean),
+        predictive_variance=np.asarray(pred_var),
+    )
+
+
+def _build_splitnormal_variational_result(
+    variational_tree: dict[str, dict[str, jnp.ndarray]],
+    inputs: SplitNormalMixtureInputs,
+    history: np.ndarray,
+    converged: bool,
+) -> VariationalResult:
+    posterior = tree_to_splitnormal_posterior(variational_tree)
+    y = jnp.asarray(inputs.y)
+    X_mean = jnp.asarray(inputs.X_mean)
+    X_scale = jnp.asarray(inputs.X_scale)
+    X_skewness = jnp.asarray(inputs.X_skewness)
+    Z = jnp.asarray(inputs.Z)
+    resp = splitnormal_responsibilities(posterior.mean, y, X_mean, X_scale, X_skewness, Z)
+    pred_mean, pred_var = splitnormal_predict_mean_variance(
+        posterior.mean,
+        X_mean,
         X_scale,
         X_skewness,
         Z,

@@ -1,10 +1,16 @@
 import numpy as np
 
-from gsm.config import FitConfig, GaussianMixtureSetting
+from gsm.config import (
+    FitConfig,
+    GaussianMixtureSetting,
+    SplitNormalMixtureSetting,
+    SplitTMixtureSetting,
+)
 from gsm.data import Dataset
 from gsm.evaluation import (
     chronological_holdout_indices,
     fit_heldout_gaussian_mixture_lpds,
+    fit_heldout_model_lpds,
     predictive_log_score,
 )
 from gsm.variational import fit_variational
@@ -48,6 +54,60 @@ def test_heldout_gaussian_mixture_lpds_smoke():
     assert np.isfinite(result.test_score.elpd)
     assert result.train_score.n_posterior_samples == 5
     assert result.test_score.n_posterior_samples == 5
+
+
+def test_heldout_splitnormal_lpds_smoke():
+    y = np.asarray([-2.1, -2.0, -1.8, -1.9, 1.8, 2.0, 2.1, 2.2])[:, None]
+    X = np.ones((len(y), 1))
+    dataset = Dataset(y=y, X=X, y_name="y", x_names=("Const",))
+    setting = SplitNormalMixtureSetting(
+        n_components=1,
+        covs=((0,), (0,), (0,)),
+        covs_mix=(0,),
+        standardize=0,
+    )
+    fit = FitConfig(
+        seed=123,
+        max_iter=5,
+        learning_rate=0.01,
+        n_restarts=1,
+        tol=0.0,
+        n_elbo_samples=2,
+        n_predictive_samples=3,
+    )
+
+    result = fit_heldout_model_lpds(dataset, setting, fit, test_size=0.25)
+
+    assert result.train_score.pointwise.shape == (6,)
+    assert result.test_score.pointwise.shape == (2,)
+    assert np.isfinite(result.test_score.elpd)
+
+
+def test_heldout_splitt_lpds_smoke():
+    y = np.asarray([-2.1, -2.0, -1.8, -1.9, 1.8, 2.0, 2.1, 2.2])[:, None]
+    X = np.ones((len(y), 1))
+    dataset = Dataset(y=y, X=X, y_name="y", x_names=("Const",))
+    setting = SplitTMixtureSetting(
+        n_components=1,
+        covs=((0,), (0,), (0,), (0,)),
+        covs_mix=(0,),
+        standardize=0,
+    )
+    fit = FitConfig(
+        seed=123,
+        max_iter=5,
+        learning_rate=0.01,
+        n_restarts=1,
+        tol=0.0,
+        n_elbo_samples=2,
+        n_predictive_samples=3,
+    )
+
+    result = fit_heldout_model_lpds(dataset, setting, fit, test_size=0.25)
+
+    assert result.train_score.pointwise.shape == (6,)
+    assert result.test_score.pointwise.shape == (2,)
+    assert np.isfinite(result.test_score.elpd)
 
 
 def test_predictive_log_score_can_fall_back_to_posterior_mean():
