@@ -6,6 +6,7 @@ from gsm.models.gaussian_mixture import (
     GaussianMixtureParams,
     log_mixture_weights,
     log_prob,
+    log_prob_observations,
     predict_mean_variance,
 )
 
@@ -54,3 +55,17 @@ def test_gaussian_mixture_log_prob_is_finite():
     )
 
     assert np.isfinite(float(log_prob(params, y, X, X, X)))
+
+
+def test_gaussian_mixture_log_prob_sums_pointwise_values():
+    X = jnp.ones((4, 1))
+    y = jnp.array([0.0, 0.5, 1.5, 2.0])
+    params = GaussianMixtureParams(
+        mean_coef=jnp.array([[0.0], [2.0]]),
+        log_variance_coef=jnp.log(jnp.array([[1.0], [1.0]])),
+        gating_coef=jnp.array([[0.0]]),
+    )
+
+    pointwise = log_prob_observations(params, y, X, X, X)
+
+    np.testing.assert_allclose(log_prob(params, y, X, X, X), jnp.sum(pointwise))

@@ -18,6 +18,20 @@ class Dataset:
     date: tuple[str, ...] | None = None
 
 
+def subset_dataset(dataset: Dataset, indices: np.ndarray) -> Dataset:
+    """Return a row subset while preserving column metadata."""
+
+    indices = np.asarray(indices, dtype=int)
+    date = None if dataset.date is None else tuple(np.asarray(dataset.date)[indices])
+    return Dataset(
+        y=dataset.y[indices],
+        X=dataset.X[indices],
+        y_name=dataset.y_name,
+        x_names=dataset.x_names,
+        date=date,
+    )
+
+
 def load_mat_dataset(path: str | Path) -> Dataset:
     """Load a MATLAB GSM data file with y, X, yName, and XName variables."""
 

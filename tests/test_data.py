@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import numpy as np
+
 from gsm.config import sp500_gaussian_mixture_setting
-from gsm.data import load_csv_dataset
+from gsm.data import Dataset, load_csv_dataset, subset_dataset
 
 
 def test_load_sp500_calendar_csv():
@@ -30,3 +32,21 @@ def test_sp500_gaussian_setting_uses_sp500_csv():
     assert setting.covs_mix == tuple(range(10))
     assert setting.add_constant is True
     assert setting.standardize == 2
+
+
+def test_subset_dataset_preserves_metadata():
+    dataset = Dataset(
+        y=np.arange(5)[:, None],
+        X=np.arange(10).reshape(5, 2),
+        y_name="y",
+        x_names=("a", "b"),
+        date=("d0", "d1", "d2", "d3", "d4"),
+    )
+
+    subset = subset_dataset(dataset, np.asarray([1, 3]))
+
+    np.testing.assert_array_equal(subset.y.reshape(-1), np.asarray([1, 3]))
+    np.testing.assert_array_equal(subset.X, np.asarray([[2, 3], [6, 7]]))
+    assert subset.y_name == "y"
+    assert subset.x_names == ("a", "b")
+    assert subset.date == ("d1", "d3")

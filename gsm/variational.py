@@ -34,6 +34,16 @@ class GaussianMixtureInputs:
 
 
 @dataclass(frozen=True)
+class GaussianMixtureStandardization:
+    X_mean_c1: np.ndarray
+    X_mean_c2: np.ndarray
+    X_variance_c1: np.ndarray
+    X_variance_c2: np.ndarray
+    Z_c1: np.ndarray
+    Z_c2: np.ndarray
+
+
+@dataclass(frozen=True)
 class VariationalResult:
     params: Any
     elbo_history: np.ndarray
@@ -46,23 +56,62 @@ class VariationalResult:
 def prepare_gaussian_mixture_inputs(
     dataset: Dataset,
     setting: GaussianMixtureSetting,
+    standardization: GaussianMixtureStandardization | None = None,
 ) -> GaussianMixtureInputs:
     """Build feature-specific design matrices from a loaded dataset."""
 
-    X_mean = dataset.X[:, setting.covs[0]]
-    X_variance = dataset.X[:, setting.covs[1]]
-    Z = dataset.X[:, setting.covs_mix]
+    X_mean, X_variance, Z = _raw_gaussian_mixture_designs(dataset, setting)
 
     if setting.standardize:
-        X_mean, _, _ = standardize_covariates(X_mean, setting.standardize)
-        X_variance, _, _ = standardize_covariates(X_variance, setting.standardize)
-        Z, _, _ = standardize_covariates(Z, setting.standardize)
+        if standardization is None:
+            X_mean, _, _ = standardize_covariates(X_mean, setting.standardize)
+            X_variance, _, _ = standardize_covariates(X_variance, setting.standardize)
+            Z, _, _ = standardize_covariates(Z, setting.standardize)
+        else:
+            X_mean = _apply_standardization(
+                X_mean,
+                setting.standardize,
+                standardization.X_mean_c1,
+                standardization.X_mean_c2,
+            )
+            X_variance = _apply_standardization(
+                X_variance,
+                setting.standardize,
+                standardization.X_variance_c1,
+                standardization.X_variance_c2,
+            )
+            Z = _apply_standardization(
+                Z,
+                setting.standardize,
+                standardization.Z_c1,
+                standardization.Z_c2,
+            )
 
     return GaussianMixtureInputs(
         y=dataset.y.reshape(-1),
         X_mean=X_mean,
         X_variance=X_variance,
         Z=Z,
+    )
+
+
+def fit_gaussian_mixture_standardization(
+    dataset: Dataset,
+    setting: GaussianMixtureSetting,
+) -> GaussianMixtureStandardization:
+    """Fit the model-specific scaling constants used by the design matrices."""
+
+    X_mean, X_variance, Z = _raw_gaussian_mixture_designs(dataset, setting)
+    _, X_mean_c1, X_mean_c2 = standardize_covariates(X_mean, setting.standardize)
+    _, X_variance_c1, X_variance_c2 = standardize_covariates(X_variance, setting.standardize)
+    _, Z_c1, Z_c2 = standardize_covariates(Z, setting.standardize)
+    return GaussianMixtureStandardization(
+        X_mean_c1=X_mean_c1,
+        X_mean_c2=X_mean_c2,
+        X_variance_c1=X_variance_c1,
+        X_variance_c2=X_variance_c2,
+        Z_c1=Z_c1,
+        Z_c2=Z_c2,
     )
 
 
@@ -219,6 +268,48 @@ def _optax_maximize(
         params = optax.apply_updates(params, updates)
 
     return params, np.asarray(history), converged
+
+
+def _raw_gaussian_mixture_designs(
+    dataset: Dataset,
+    setting: GaussianMixtureSetting,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return (
+        dataset.X[:, setting.covs[0]],
+        dataset.X[:, setting.covs[1]],
+        dataset.X[:, setting.covs_mix],
+    )
+
+
+def _apply_standardization(
+    X: np.ndarray,
+    method: int,
+    c1: np.ndarray,
+    c2: np.ndarray,
+) -> np.ndarray:
+    X = np.asarray(X, dtype=float).copy()
+    c1 = np.asarray(c1, dtype=float)
+    c2 = np.asarray(c2, dtype=float)
+    if X.shape[1] != c1.shape[0] or X.shape[1] != c2.shape[0]:
+        raise ValueError("standardization constants do not match design matrix")
+    if method == 0:
+        return X
+
+    use_column = ~(np.isnan(c1) | np.isnan(c2))
+    if not np.any(use_column):
+        return X
+
+    if method == 1:
+        X[:, use_column] = (X[:, use_column] - c1[use_column]) / c2[use_column]
+    elif method == 2:
+        scale = 2.0 / (c2[use_column] - c1[use_column])
+        offset = 1.0 - scale * c2[use_column]
+        X[:, use_column] = X[:, use_column] * scale + offset
+    elif method == 3:
+        X[:, use_column] = X[:, use_column] - c1[use_column]
+    else:
+        raise ValueError(f"unknown standardization method: {method}")
+    return X
 
 
 def _coefficient_log_prior(

@@ -73,13 +73,19 @@ def responsibilities(params: GaussianMixtureParams, y, X_mean, X_variance, Z):
     return jnp.exp(logits - logsumexp(logits, axis=1, keepdims=True))
 
 
-def log_prob(params: GaussianMixtureParams, y, X_mean, X_variance, Z):
-    """Marginal log likelihood with mixture allocations integrated out."""
+def log_prob_observations(params: GaussianMixtureParams, y, X_mean, X_variance, Z):
+    """Return pointwise marginal log likelihoods."""
 
     mean, variance = component_features(params, X_mean, X_variance)
     comp_lp = component_log_prob(y, mean, variance)
     log_w = log_mixture_weights(params.gating_coef, Z)
-    return jnp.sum(logsumexp(log_w + comp_lp, axis=1))
+    return logsumexp(log_w + comp_lp, axis=1)
+
+
+def log_prob(params: GaussianMixtureParams, y, X_mean, X_variance, Z):
+    """Marginal log likelihood with mixture allocations integrated out."""
+
+    return jnp.sum(log_prob_observations(params, y, X_mean, X_variance, Z))
 
 
 def predict_mean_variance(params: GaussianMixtureParams, X_mean, X_variance, Z):

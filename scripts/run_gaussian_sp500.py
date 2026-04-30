@@ -10,6 +10,7 @@ if str(PYTHON_CODE_ROOT) not in sys.path:
     sys.path.insert(0, str(PYTHON_CODE_ROOT))
 
 from gsm.variational import fit_variational
+from gsm.evaluation import fit_heldout_gaussian_mixture_lpds
 from scripts.Gaussian_config import FIT, MODEL, load_default_dataset
 
 
@@ -31,6 +32,12 @@ def main() -> None:
     )
     parser.add_argument("--ard-shape", type=float, default=FIT.ard_shape)
     parser.add_argument("--ard-rate", type=float, default=FIT.ard_rate)
+    parser.add_argument(
+        "--holdout-fraction",
+        type=float,
+        default=0.0,
+        help="hold out the last fraction of rows and report train/test ELPD",
+    )
     args = parser.parse_args()
 
     dataset = load_default_dataset()
@@ -44,8 +51,30 @@ def main() -> None:
         ard_shape=args.ard_shape,
         ard_rate=args.ard_rate,
     )
-    result = fit_variational(dataset, MODEL, fit)
+    if args.holdout_fraction:
+        heldout = fit_heldout_gaussian_mixture_lpds(
+            dataset,
+            MODEL,
+            fit,
+            test_size=args.holdout_fraction,
+        )
+        result = heldout.train_result
+        print(f"rows: {dataset.y.shape[0]}")
+        print(f"train rows: {heldout.train_indices.shape[0]}")
+        print(f"test rows: {heldout.test_indices.shape[0]}")
+        print(f"components: {MODEL.n_components}")
+        print(f"ard: {fit.use_ard}")
+        print(f"iterations: {len(result.elbo_history)}")
+        print(f"converged: {result.converged}")
+        print(f"initial objective: {result.elbo_history[0]:.6f}")
+        print(f"final objective: {result.elbo_history[-1]:.6f}")
+        print(f"train elpd: {heldout.train_score.elpd:.6f}")
+        print(f"train mean elpd: {heldout.train_score.mean_elpd:.6f}")
+        print(f"test elpd: {heldout.test_score.elpd:.6f}")
+        print(f"test mean elpd: {heldout.test_score.mean_elpd:.6f}")
+        return
 
+    result = fit_variational(dataset, MODEL, fit)
     print(f"rows: {dataset.y.shape[0]}")
     print(f"components: {MODEL.n_components}")
     print(f"ard: {fit.use_ard}")
