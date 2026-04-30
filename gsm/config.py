@@ -64,6 +64,8 @@ class GaussianMixtureSetting:
     standardize: int = 1
     prior_mean_feat: tuple[float, float] = (0.0, 1.0)
     prior_std_feat: tuple[float, float] = (10.0, 10.0)
+    prior_shrink: tuple[float | str, float | str] = (100.0, 100.0)
+    prior_shrink_mix: float | str = "UnitInfo"
     prior_inclusion: tuple[float, float] = (0.5, 0.5)
     prior_inclusion_mix: float = 0.5
 
