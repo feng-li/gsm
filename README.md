@@ -1,7 +1,7 @@
 # gsm
 
-`**gsm**` is the Python migration package for the Matlab codebase originally written
-by Mattias Villani and his students, Feng Li, Bertil Wegmann, Matias Quiroz et. al. starting from 2007. The current implementation focuses on
+`gsm` is the Python migration package for the Matlab codebase originally written
+by Mattias Villani and his students, Feng Li, Bertil Wegmann, Matias Quiroz et al. starting from 2007. The current implementation focuses on
 one working path: covariate-dependent Gaussian mixture models fitted with variational Bayes in JAX.
 
 The package is intentionally small while the migration is underway. The Python
