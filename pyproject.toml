@@ -7,14 +7,12 @@ dependencies = [
     "jax",
     "jaxlib",
     "numpy",
+    "optax",
     "scikit-learn",
     "scipy",
 ]
 
 [project.optional-dependencies]
-optax = [
-    "optax",
-]
 dev = [
     "pytest",
     "ruff",

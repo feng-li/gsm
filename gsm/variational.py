@@ -13,6 +13,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import numpy as np
+import optax
 
 from .config import FitConfig, GaussianMixtureSetting, ModelConfig
 from .data import Dataset, standardize_covariates
@@ -133,7 +134,7 @@ def fit_gaussian_mixture_vb(
         params = initialize_gaussian_mixture_params(inputs, setting)
         if restart:
             params = _jitter_params(params, fit.seed + restart)
-        params, history, converged = _adam_maximize(
+        params, history, converged = _optax_maximize(
             params,
             lambda p: gaussian_mixture_elbo(p, inputs),
             max_iter=fit.max_iter,
@@ -161,39 +162,28 @@ def fit_variational(
     raise NotImplementedError(f"no variational implementation for model type {type(model)!r}")
 
 
-def _adam_maximize(
+def _optax_maximize(
     params: dict[str, jnp.ndarray],
     objective,
     max_iter: int,
     learning_rate: float,
     tol: float,
 ) -> tuple[dict[str, jnp.ndarray], np.ndarray, bool]:
-    value_and_grad = jax.value_and_grad(objective)
-    m = jax.tree_util.tree_map(jnp.zeros_like, params)
-    v = jax.tree_util.tree_map(jnp.zeros_like, params)
-    beta1 = 0.9
-    beta2 = 0.999
-    eps = 1e-8
+    loss_and_grad = jax.value_and_grad(lambda p: -objective(p))
+    optimizer = optax.adam(learning_rate)
+    opt_state = optimizer.init(params)
     history: list[float] = []
     converged = False
 
-    for step in range(1, max_iter + 1):
-        value, grad = value_and_grad(params)
-        history.append(float(value))
+    for _ in range(1, max_iter + 1):
+        loss, grad = loss_and_grad(params)
+        history.append(float(-loss))
         if len(history) > 5 and abs(history[-1] - history[-2]) < tol:
             converged = True
             break
 
-        m = jax.tree_util.tree_map(lambda old, g: beta1 * old + (1.0 - beta1) * g, m, grad)
-        v = jax.tree_util.tree_map(lambda old, g: beta2 * old + (1.0 - beta2) * (g**2), v, grad)
-        m_hat = jax.tree_util.tree_map(lambda value: value / (1.0 - beta1**step), m)
-        v_hat = jax.tree_util.tree_map(lambda value: value / (1.0 - beta2**step), v)
-        params = jax.tree_util.tree_map(
-            lambda p, mh, vh: p + learning_rate * mh / (jnp.sqrt(vh) + eps),
-            params,
-            m_hat,
-            v_hat,
-        )
+        updates, opt_state = optimizer.update(grad, opt_state, params)
+        params = optax.apply_updates(params, updates)
 
     return params, np.asarray(history), converged
 
@@ -227,4 +217,3 @@ def _jitter_params(params: dict[str, jnp.ndarray], seed: int) -> dict[str, jnp.n
         name: value + jnp.asarray(0.01 * rng.standard_normal(value.shape))
         for name, value in params.items()
     }
-
