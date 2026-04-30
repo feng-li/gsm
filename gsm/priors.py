@@ -35,6 +35,17 @@ class GaussianMixtureCoefficientPriors:
     gating: GaussianCoefficientPrior | None
 
 
+@dataclass(frozen=True)
+class SplitTMixtureCoefficientPriors:
+    """Coefficient priors for the split-t mixture scaffold."""
+
+    mean: GaussianCoefficientPrior
+    df: GaussianCoefficientPrior
+    scale: GaussianCoefficientPrior
+    skewness: GaussianCoefficientPrior
+    gating: GaussianCoefficientPrior | None
+
+
 def convert_prior_to_link_scale(
     prior_mean_feat: float,
     prior_std_feat: float,
@@ -172,6 +183,49 @@ def build_gaussian_mixture_priors(
             setting.link_types[1],
             setting.prior_shrink[1],
             unit_info_diag[1],
+        ),
+        gating=build_gating_prior(
+            inputs.Z,
+            setting.n_components,
+            setting.prior_shrink_mix,
+        ),
+    )
+
+
+def build_splitt_mixture_priors(
+    inputs: Any,
+    setting: Any,
+) -> SplitTMixtureCoefficientPriors:
+    """Build all coefficient priors needed by ``fit_splitt_mixture_vb``."""
+
+    return SplitTMixtureCoefficientPriors(
+        mean=build_gaussian_coefficient_prior(
+            inputs.X_mean,
+            setting.prior_mean_feat[0],
+            setting.prior_std_feat[0],
+            setting.link_types[0],
+            setting.prior_shrink[0],
+        ),
+        df=build_gaussian_coefficient_prior(
+            inputs.X_df,
+            setting.prior_mean_feat[1],
+            setting.prior_std_feat[1],
+            setting.link_types[1],
+            setting.prior_shrink[1],
+        ),
+        scale=build_gaussian_coefficient_prior(
+            inputs.X_scale,
+            setting.prior_mean_feat[2],
+            setting.prior_std_feat[2],
+            setting.link_types[2],
+            setting.prior_shrink[2],
+        ),
+        skewness=build_gaussian_coefficient_prior(
+            inputs.X_skewness,
+            setting.prior_mean_feat[3],
+            setting.prior_std_feat[3],
+            setting.link_types[3],
+            setting.prior_shrink[3],
         ),
         gating=build_gating_prior(
             inputs.Z,

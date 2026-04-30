@@ -1,6 +1,7 @@
 """Small configuration objects for the migration skeleton."""
 
 from dataclasses import dataclass, field
+import math
 
 
 @dataclass
@@ -70,6 +71,48 @@ class GaussianMixtureSetting:
     prior_inclusion_mix: float = 0.5
 
 
+@dataclass(frozen=True)
+class SplitTMixtureSetting:
+    """Minimal Python version of MATLAB's asymmetric Student-t GSM setting.
+
+    The MATLAB model is named ``AsymStudT``. The Python migration uses
+    ``SplitT`` because the density is a two-piece, or split, Student-t kernel.
+    """
+
+    model_name: str = "SplitT"
+    data_file_name: str = "sp500_1990-2009_calendar.csv"
+    feature_names: tuple[str, str, str, str] = ("Mean", "DF", "Scale", "Skewness")
+    link_types: tuple[str, str, str, str] = ("identity", "log", "log", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...], tuple[int, ...]] = (
+        (0,),
+        tuple(range(10)),
+        tuple(range(10)),
+        tuple(range(10)),
+    )
+    covs_mix: tuple[int, ...] = tuple(range(10))
+    on_trial: tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...], tuple[int, ...]] = (
+        (),
+        tuple(range(1, 10)),
+        tuple(range(1, 10)),
+        tuple(range(1, 10)),
+    )
+    on_trial_mix: tuple[int, ...] = tuple(range(1, 10))
+    add_constant: bool = True
+    n_components: int = 3
+    standardize: int = 2
+    prior_mean_feat: tuple[float, float, float, float] = (0.0, 10.0, math.sqrt(0.8), 1.0)
+    prior_std_feat: tuple[float, float, float, float] = (10.0, 7.0, 1.0, 1.0)
+    prior_shrink: tuple[float | str, float | str, float | str, float | str] = (
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+    )
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float, float, float, float] = (0.5, 0.5, 0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+
+
 def hetero_gaussian_setting(n_components: int = 2) -> GaussianMixtureSetting:
     """Return the default HeteroGauss setting with an adjustable component count."""
 
@@ -93,3 +136,9 @@ def sp500_gaussian_mixture_setting(n_components: int = 3) -> GaussianMixtureSett
         n_components=n_components,
         standardize=2,
     )
+
+
+def sp500_splitt_mixture_setting(n_components: int = 3) -> SplitTMixtureSetting:
+    """Split-t mixture setting for ``sp500_1990-2009_calendar.csv``."""
+
+    return SplitTMixtureSetting(n_components=n_components)
