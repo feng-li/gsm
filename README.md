@@ -1,12 +1,10 @@
 # gsm
 
-`gsm` is the Python migration package for the Matlab codebase originally written
-by Mattias Villani and his students, Feng Li, Bertil Wegmann, Matias Quiroz et al. starting from 2007. The current implementation focuses on
-one working path: covariate-dependent Gaussian mixture models fitted with variational Bayes in JAX.
+The Python module `gsm` implements the covariate-dependent smooth mixture models developed by Mattias Villani, Feng Li, Matias Quiroz et al. The current implementation focuses on light-weighted fitting with variational Bayes in JAX.
 
-The package is intentionally small while the migration is underway. The Python
+The package is intentionally small while the implementation is underway. The Python
 target is variational inference rather than Metropolis-Hastings with Newton
-updates.
+updates in Villani, Li, et al's original publishsed papers.
 
 ## General Purpose
 
@@ -41,7 +39,6 @@ comparison.
 - Mean-field Gaussian variational posterior over Gaussian mixture coefficients.
 - Optional ARD shrinkage for non-constant covariates.
 - Posterior-sampled held-out ELPD/LPDS for chronological train/test evaluation.
-- Early Poisson and negative-binomial model kernels for later migration work.
 
 ## Installation
 
@@ -117,16 +114,12 @@ data/
 
 ## Literature
 
-- Li, F., Villani, M. and Kohn, R. (2010). Flexible modeling of conditional
-  distributions using smooth mixtures of asymmetric Student t densities. Journal
-  of Statistical Planning and Inference, 140(12), 3638-3654.
-  https://doi.org/10.1016/j.jspi.2010.04.031.
-- Villani, M., Kohn, R. and Giordani, P. (2009). Regression Density Estimation
-  using Smooth Adaptive Gaussian Mixtures, Journal of Econometrics.
-- Kohn, R. and Villani, M. (2009). A General Approach to Regression Density
-  Estimation using Smooth Mixtures of Over-Dispersed Models.
-- Villani, M., Kohn, R. and Giordani, P. (2008). Regression Density Estimation
-  using Smooth Adaptive Gaussian Mixtures.
+- Villani, M., Kohn, R., & Nott, D. J. (2012). Generalized Smooth Finite Mixtures. Journal of Econometrics, 171(2), 121–133. https://doi.org/10.1016/j.jeconom.2012.06.012
+- Li, F., Villani, M., & Kohn, R. (2011). Modeling conditional densities using finite smooth mixtures. In K. Mengersen, C. Robert, & M. Titterington (Eds.), Mixtures: Estimation and applications (pp. 123–144). John Wiley & Sons Inc, Chichester. https://doi.org/10.1002/9781119995678.ch6
+- Li, F., Villani, M. and Kohn, R. (2010). Flexible modeling of conditional distributions using smooth mixtures of asymmetric Student t densities. Journal
+  of Statistical Planning and Inference, 140(12), 3638-3654. https://doi.org/10.1016/j.jspi.2010.04.031.
+- Villani, M., Kohn, R., & Giordani, P. (2009). Regression density estimation using smooth adaptive Gaussian mixtures. Journal of Econometrics, 153(2), 155–173. https://doi.org/10.1016/j.jeconom.2009.05.004
+
 
 ## Basic API
 
