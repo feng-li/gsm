@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gsm.config import hetero_gaussian_setting
-from gsm.models.gaussian_mixture import (
+from gsm.models.gaussian import (
     GaussianMixtureParams,
     log_mixture_weights,
     log_prob,

@@ -11,37 +11,52 @@ import numpy as np
 from .config import (
     FitConfig,
     GaussianMixtureSetting,
+    LogNormalMixtureSetting,
+    LogNormalRepMixtureSetting,
     SplitNormalMixtureSetting,
     SplitTMixtureSetting,
 )
 from .data import Dataset, subset_dataset
-from .models.gaussian_mixture import log_prob_observations as gaussian_log_prob_observations
+from .models.gaussian import log_prob_observations as gaussian_log_prob_observations
+from .models.lognormal import log_prob_observations as lognormal_log_prob_observations
 from .models.splitnormal import log_prob_observations as splitnormal_log_prob_observations
 from .models.splitt import log_prob_observations as splitt_log_prob_observations
 from .variational import (
     GaussianMixtureStandardization,
+    LogNormalMixtureStandardization,
     SplitNormalMixtureStandardization,
     SplitTMixtureStandardization,
     VariationalResult,
     fit_gaussian_mixture_standardization,
+    fit_lognormal_mixture_standardization,
     fit_splitnormal_mixture_standardization,
     fit_splitt_mixture_standardization,
     fit_variational,
     prepare_gaussian_mixture_inputs,
+    prepare_lognormal_mixture_inputs,
     prepare_splitnormal_mixture_inputs,
     prepare_splitt_mixture_inputs,
     sample_gaussian_mixture_posterior,
+    sample_lognormal_mixture_posterior,
     sample_splitnormal_mixture_posterior,
     sample_splitt_mixture_posterior,
     tree_to_gaussian_params,
+    tree_to_lognormal_params,
     tree_to_splitnormal_params,
     tree_to_splitt_params,
 )
 
 
-ModelSetting = GaussianMixtureSetting | SplitNormalMixtureSetting | SplitTMixtureSetting
+ModelSetting = (
+    GaussianMixtureSetting
+    | LogNormalMixtureSetting
+    | LogNormalRepMixtureSetting
+    | SplitNormalMixtureSetting
+    | SplitTMixtureSetting
+)
 ModelStandardization = (
     GaussianMixtureStandardization
+    | LogNormalMixtureStandardization
     | SplitNormalMixtureStandardization
     | SplitTMixtureStandardization
 )
@@ -180,6 +195,8 @@ def _fit_model_standardization(
 ) -> ModelStandardization:
     if isinstance(setting, GaussianMixtureSetting):
         return fit_gaussian_mixture_standardization(dataset, setting)
+    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
+        return fit_lognormal_mixture_standardization(dataset, setting)
     if isinstance(setting, SplitNormalMixtureSetting):
         return fit_splitnormal_mixture_standardization(dataset, setting)
     if isinstance(setting, SplitTMixtureSetting):
@@ -194,6 +211,8 @@ def _prepare_model_inputs(
 ) -> Any:
     if isinstance(setting, GaussianMixtureSetting):
         return prepare_gaussian_mixture_inputs(dataset, setting, standardization)
+    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
+        return prepare_lognormal_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, SplitNormalMixtureSetting):
         return prepare_splitnormal_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, SplitTMixtureSetting):
@@ -204,6 +223,8 @@ def _prepare_model_inputs(
 def _sample_model_posterior(posterior, setting: ModelSetting, seed: int, n_samples: int):
     if isinstance(setting, GaussianMixtureSetting):
         return sample_gaussian_mixture_posterior(posterior, seed, n_samples)
+    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
+        return sample_lognormal_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, SplitNormalMixtureSetting):
         return sample_splitnormal_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, SplitTMixtureSetting):
@@ -214,6 +235,8 @@ def _sample_model_posterior(posterior, setting: ModelSetting, seed: int, n_sampl
 def _tree_to_model_params(sample_tree, setting: ModelSetting):
     if isinstance(setting, GaussianMixtureSetting):
         return tree_to_gaussian_params(sample_tree)
+    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
+        return tree_to_lognormal_params(sample_tree)
     if isinstance(setting, SplitNormalMixtureSetting):
         return tree_to_splitnormal_params(sample_tree)
     if isinstance(setting, SplitTMixtureSetting):
@@ -229,6 +252,15 @@ def _pointwise_log_prob(params, inputs, setting: ModelSetting):
             jnp.asarray(inputs.X_mean),
             jnp.asarray(inputs.X_variance),
             jnp.asarray(inputs.Z),
+        )
+    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
+        return lognormal_log_prob_observations(
+            params,
+            jnp.asarray(inputs.y),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_scale),
+            jnp.asarray(inputs.Z),
+            reparameterized=setting.reparameterized,
         )
     if isinstance(setting, SplitNormalMixtureSetting):
         return splitnormal_log_prob_observations(

@@ -18,16 +18,24 @@ import optax
 from .config import (
     FitConfig,
     GaussianMixtureSetting,
+    LogNormalMixtureSetting,
+    LogNormalRepMixtureSetting,
     ModelConfig,
     SplitNormalMixtureSetting,
     SplitTMixtureSetting,
 )
 from .data import Dataset, standardize_covariates
-from .models.gaussian_mixture import (
+from .models.gaussian import (
     GaussianMixtureParams,
     log_prob as gaussian_log_prob,
     predict_mean_variance,
     responsibilities as gaussian_responsibilities,
+)
+from .models.lognormal import (
+    LogNormalMixtureParams,
+    log_prob as lognormal_log_prob,
+    predict_mean_variance as lognormal_predict_mean_variance,
+    responsibilities as lognormal_responsibilities,
 )
 from .models.splitnormal import (
     SplitNormalMixtureParams,
@@ -43,9 +51,11 @@ from .models.splitt import (
 )
 from .priors import (
     GaussianMixtureCoefficientPriors,
+    LogNormalMixtureCoefficientPriors,
     SplitNormalMixtureCoefficientPriors,
     SplitTMixtureCoefficientPriors,
     build_gaussian_mixture_priors,
+    build_lognormal_mixture_priors,
     build_splitnormal_mixture_priors,
     build_splitt_mixture_priors,
     coefficient_log_prior,
@@ -57,6 +67,14 @@ class GaussianMixtureInputs:
     y: np.ndarray
     X_mean: np.ndarray
     X_variance: np.ndarray
+    Z: np.ndarray
+
+
+@dataclass(frozen=True)
+class LogNormalMixtureInputs:
+    y: np.ndarray
+    X_mean: np.ndarray
+    X_scale: np.ndarray
     Z: np.ndarray
 
 
@@ -85,6 +103,16 @@ class GaussianMixtureStandardization:
     X_mean_c2: np.ndarray
     X_variance_c1: np.ndarray
     X_variance_c2: np.ndarray
+    Z_c1: np.ndarray
+    Z_c2: np.ndarray
+
+
+@dataclass(frozen=True)
+class LogNormalMixtureStandardization:
+    X_mean_c1: np.ndarray
+    X_mean_c2: np.ndarray
+    X_scale_c1: np.ndarray
+    X_scale_c2: np.ndarray
     Z_c1: np.ndarray
     Z_c2: np.ndarray
 
@@ -121,6 +149,14 @@ class GaussianMixturePosterior:
 
     mean: GaussianMixtureParams
     log_std: GaussianMixtureParams
+
+
+@dataclass(frozen=True)
+class LogNormalMixturePosterior:
+    """Mean-field Gaussian posterior over lognormal-mixture coefficients."""
+
+    mean: LogNormalMixtureParams
+    log_std: LogNormalMixtureParams
 
 
 @dataclass(frozen=True)
@@ -188,6 +224,49 @@ def prepare_gaussian_mixture_inputs(
         y=dataset.y.reshape(-1),
         X_mean=X_mean,
         X_variance=X_variance,
+        Z=Z,
+    )
+
+
+def prepare_lognormal_mixture_inputs(
+    dataset: Dataset,
+    setting: LogNormalMixtureSetting | LogNormalRepMixtureSetting,
+    standardization: LogNormalMixtureStandardization | None = None,
+) -> LogNormalMixtureInputs:
+    """Build feature-specific design matrices for lognormal mixtures."""
+
+    _validate_positive_response(dataset.y)
+    X_mean, X_scale, Z = _raw_lognormal_mixture_designs(dataset, setting)
+
+    if setting.standardize:
+        if standardization is None:
+            X_mean, _, _ = standardize_covariates(X_mean, setting.standardize)
+            X_scale, _, _ = standardize_covariates(X_scale, setting.standardize)
+            Z, _, _ = standardize_covariates(Z, setting.standardize)
+        else:
+            X_mean = _apply_standardization(
+                X_mean,
+                setting.standardize,
+                standardization.X_mean_c1,
+                standardization.X_mean_c2,
+            )
+            X_scale = _apply_standardization(
+                X_scale,
+                setting.standardize,
+                standardization.X_scale_c1,
+                standardization.X_scale_c2,
+            )
+            Z = _apply_standardization(
+                Z,
+                setting.standardize,
+                standardization.Z_c1,
+                standardization.Z_c2,
+            )
+
+    return LogNormalMixtureInputs(
+        y=dataset.y.reshape(-1),
+        X_mean=X_mean,
+        X_scale=X_scale,
         Z=Z,
     )
 
@@ -318,6 +397,26 @@ def fit_gaussian_mixture_standardization(
     )
 
 
+def fit_lognormal_mixture_standardization(
+    dataset: Dataset,
+    setting: LogNormalMixtureSetting | LogNormalRepMixtureSetting,
+) -> LogNormalMixtureStandardization:
+    """Fit the lognormal model-specific scaling constants."""
+
+    X_mean, X_scale, Z = _raw_lognormal_mixture_designs(dataset, setting)
+    _, X_mean_c1, X_mean_c2 = standardize_covariates(X_mean, setting.standardize)
+    _, X_scale_c1, X_scale_c2 = standardize_covariates(X_scale, setting.standardize)
+    _, Z_c1, Z_c2 = standardize_covariates(Z, setting.standardize)
+    return LogNormalMixtureStandardization(
+        X_mean_c1=X_mean_c1,
+        X_mean_c2=X_mean_c2,
+        X_scale_c1=X_scale_c1,
+        X_scale_c2=X_scale_c2,
+        Z_c1=Z_c1,
+        Z_c2=Z_c2,
+    )
+
+
 def fit_splitt_mixture_standardization(
     dataset: Dataset,
     setting: SplitTMixtureSetting,
@@ -406,6 +505,51 @@ def initialize_gaussian_mixture_variational_params(
     """Initialize a diagonal Gaussian variational family."""
 
     mean_tree = initialize_gaussian_mixture_params(inputs, setting)
+    log_std_tree = jax.tree_util.tree_map(
+        lambda value: jnp.full_like(value, init_log_std),
+        mean_tree,
+    )
+    return {"mean": mean_tree, "log_std": log_std_tree}
+
+
+def initialize_lognormal_mixture_params(
+    inputs: LogNormalMixtureInputs,
+    setting: LogNormalMixtureSetting | LogNormalRepMixtureSetting,
+) -> dict[str, jnp.ndarray]:
+    """Deterministic initialization for the lognormal VB optimizer."""
+
+    y = np.asarray(inputs.y)
+    n_components = setting.n_components
+    quantiles = np.linspace(0.15, 0.85, n_components)
+    if setting.reparameterized:
+        means = np.maximum(np.quantile(y, quantiles), 1e-6)
+        scale = max(float(np.std(y, ddof=1)), 1e-3)
+    else:
+        log_y = np.log(y)
+        means = np.maximum(np.quantile(log_y, quantiles), 1e-6)
+        scale = max(float(np.std(log_y, ddof=1)), 1e-3)
+
+    mean_coef = np.zeros((n_components, inputs.X_mean.shape[1]))
+    mean_coef[:, 0] = np.log(means)
+    scale_coef = np.zeros((n_components, inputs.X_scale.shape[1]))
+    scale_coef[:, 0] = np.log(scale)
+    gating_coef = np.zeros((max(n_components - 1, 0), inputs.Z.shape[1]))
+
+    return {
+        "mean_coef": jnp.asarray(mean_coef),
+        "scale_coef": jnp.asarray(scale_coef),
+        "gating_coef": jnp.asarray(gating_coef),
+    }
+
+
+def initialize_lognormal_mixture_variational_params(
+    inputs: LogNormalMixtureInputs,
+    setting: LogNormalMixtureSetting | LogNormalRepMixtureSetting,
+    init_log_std: float = -5.0,
+) -> dict[str, dict[str, jnp.ndarray]]:
+    """Initialize a diagonal Gaussian variational family for lognormal mixtures."""
+
+    mean_tree = initialize_lognormal_mixture_params(inputs, setting)
     log_std_tree = jax.tree_util.tree_map(
         lambda value: jnp.full_like(value, init_log_std),
         mean_tree,
@@ -514,6 +658,23 @@ def tree_to_gaussian_posterior(
     return GaussianMixturePosterior(
         mean=tree_to_gaussian_params(tree["mean"]),
         log_std=tree_to_gaussian_params(tree["log_std"]),
+    )
+
+
+def tree_to_lognormal_params(tree: dict[str, jnp.ndarray]) -> LogNormalMixtureParams:
+    return LogNormalMixtureParams(
+        mean_coef=tree["mean_coef"],
+        scale_coef=tree["scale_coef"],
+        gating_coef=tree["gating_coef"],
+    )
+
+
+def tree_to_lognormal_posterior(
+    tree: dict[str, dict[str, jnp.ndarray]],
+) -> LogNormalMixturePosterior:
+    return LogNormalMixturePosterior(
+        mean=tree_to_lognormal_params(tree["mean"]),
+        log_std=tree_to_lognormal_params(tree["log_std"]),
     )
 
 
@@ -626,6 +787,99 @@ def gaussian_mixture_variational_elbo(
         return gaussian_mixture_elbo(
             param_tree,
             inputs,
+            coefficient_prior_scale=coefficient_prior_scale,
+            use_ard=use_ard,
+            ard_shape=ard_shape,
+            ard_rate=ard_rate,
+            coefficient_priors=coefficient_priors,
+        )
+
+    log_joint = jax.vmap(sample_log_joint)(sample_tree)
+    return jnp.mean(log_joint) + _mean_field_gaussian_entropy(variational_tree["log_std"])
+
+
+def lognormal_mixture_elbo(
+    param_tree: dict[str, jnp.ndarray],
+    inputs: LogNormalMixtureInputs,
+    setting: LogNormalMixtureSetting | LogNormalRepMixtureSetting,
+    coefficient_prior_scale: float = 10.0,
+    use_ard: bool = False,
+    ard_shape: float = 1e-2,
+    ard_rate: float = 1e-2,
+    coefficient_priors: LogNormalMixtureCoefficientPriors | None = None,
+) -> jnp.ndarray:
+    """Collapsed-allocation ELBO for lognormal mixtures."""
+
+    params = tree_to_lognormal_params(param_tree)
+    y = jnp.asarray(inputs.y)
+    X_mean = jnp.asarray(inputs.X_mean)
+    X_scale = jnp.asarray(inputs.X_scale)
+    Z = jnp.asarray(inputs.Z)
+
+    log_likelihood = lognormal_log_prob(
+        params,
+        y,
+        X_mean,
+        X_scale,
+        Z,
+        reparameterized=setting.reparameterized,
+    )
+    log_prior = (
+        coefficient_log_prior(
+            param_tree["mean_coef"],
+            inputs.X_mean,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+            coefficient_priors.mean if coefficient_priors is not None else None,
+        )
+        + coefficient_log_prior(
+            param_tree["scale_coef"],
+            inputs.X_scale,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+            coefficient_priors.scale if coefficient_priors is not None else None,
+        )
+        + coefficient_log_prior(
+            param_tree["gating_coef"],
+            inputs.Z,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+            coefficient_priors.gating if coefficient_priors is not None else None,
+        )
+    )
+    return log_likelihood + log_prior
+
+
+def lognormal_mixture_variational_elbo(
+    variational_tree: dict[str, dict[str, jnp.ndarray]],
+    inputs: LogNormalMixtureInputs,
+    setting: LogNormalMixtureSetting | LogNormalRepMixtureSetting,
+    noise_tree: dict[str, jnp.ndarray],
+    coefficient_prior_scale: float = 10.0,
+    use_ard: bool = False,
+    ard_shape: float = 1e-2,
+    ard_rate: float = 1e-2,
+    coefficient_priors: LogNormalMixtureCoefficientPriors | None = None,
+) -> jnp.ndarray:
+    """Monte Carlo ELBO for a lognormal mean-field Gaussian posterior."""
+
+    sample_tree = _sample_param_trees(
+        variational_tree["mean"],
+        variational_tree["log_std"],
+        noise_tree,
+    )
+
+    def sample_log_joint(param_tree):
+        return lognormal_mixture_elbo(
+            param_tree,
+            inputs,
+            setting,
             coefficient_prior_scale=coefficient_prior_scale,
             use_ard=use_ard,
             ard_shape=ard_shape,
@@ -848,6 +1102,21 @@ def sample_gaussian_mixture_posterior(
     return _sample_param_trees(mean_tree, log_std_tree, noise_tree)
 
 
+def sample_lognormal_mixture_posterior(
+    posterior: LogNormalMixturePosterior,
+    seed: int,
+    n_samples: int,
+) -> dict[str, jnp.ndarray]:
+    """Draw coefficient trees from a fitted lognormal mean-field posterior."""
+
+    if n_samples < 1:
+        raise ValueError("n_samples must be positive")
+    mean_tree = _lognormal_params_to_tree(posterior.mean)
+    log_std_tree = _lognormal_params_to_tree(posterior.log_std)
+    noise_tree = _sample_noise_like(mean_tree, jax.random.PRNGKey(seed), n_samples)
+    return _sample_param_trees(mean_tree, log_std_tree, noise_tree)
+
+
 def sample_splitt_mixture_posterior(
     posterior: SplitTMixturePosterior,
     seed: int,
@@ -927,6 +1196,70 @@ def fit_gaussian_mixture_vb(
             tol=fit.tol,
         )
         result = _build_variational_result(variational_params, inputs, history, converged)
+        if best_result is None or result.elbo_history[-1] > best_result.elbo_history[-1]:
+            best_result = result
+
+    if best_result is None:
+        raise RuntimeError("no variational optimization runs were executed")
+    return best_result
+
+
+def fit_lognormal_mixture_vb(
+    dataset: Dataset,
+    setting: LogNormalMixtureSetting | LogNormalRepMixtureSetting,
+    fit: FitConfig | None = None,
+) -> VariationalResult:
+    """Fit the lognormal mixture scaffold with JAX gradients and local Adam."""
+
+    fit = fit or FitConfig()
+    if fit.n_elbo_samples < 1:
+        raise ValueError("n_elbo_samples must be positive")
+
+    inputs = prepare_lognormal_mixture_inputs(dataset, setting)
+    coefficient_priors = build_lognormal_mixture_priors(inputs, setting)
+    best_result: VariationalResult | None = None
+
+    for restart in range(fit.n_restarts):
+        variational_params = initialize_lognormal_mixture_variational_params(
+            inputs,
+            setting,
+            init_log_std=fit.posterior_init_log_std,
+        )
+        if restart:
+            variational_params["mean"] = _jitter_params(
+                variational_params["mean"],
+                fit.seed + restart,
+            )
+
+        noise_tree = _sample_noise_like(
+            variational_params["mean"],
+            jax.random.PRNGKey(fit.seed + 1009 * (restart + 1)),
+            fit.n_elbo_samples,
+        )
+        variational_params, history, converged = _optax_maximize(
+            variational_params,
+            lambda q: lognormal_mixture_variational_elbo(
+                q,
+                inputs,
+                setting,
+                noise_tree,
+                coefficient_prior_scale=fit.coefficient_prior_scale,
+                use_ard=fit.use_ard,
+                ard_shape=fit.ard_shape,
+                ard_rate=fit.ard_rate,
+                coefficient_priors=coefficient_priors,
+            ),
+            max_iter=fit.max_iter,
+            learning_rate=fit.learning_rate,
+            tol=fit.tol,
+        )
+        result = _build_lognormal_variational_result(
+            variational_params,
+            inputs,
+            setting,
+            history,
+            converged,
+        )
         if best_result is None or result.elbo_history[-1] > best_result.elbo_history[-1]:
             best_result = result
 
@@ -1056,13 +1389,22 @@ def fit_splitnormal_mixture_vb(
 
 def fit_variational(
     dataset: Dataset,
-    model: ModelConfig | GaussianMixtureSetting | SplitNormalMixtureSetting | SplitTMixtureSetting,
+    model: (
+        ModelConfig
+        | GaussianMixtureSetting
+        | LogNormalMixtureSetting
+        | LogNormalRepMixtureSetting
+        | SplitNormalMixtureSetting
+        | SplitTMixtureSetting
+    ),
     fit: FitConfig | None = None,
 ) -> VariationalResult:
     """Dispatch to the available variational inference implementation."""
 
     if isinstance(model, GaussianMixtureSetting):
         return fit_gaussian_mixture_vb(dataset, model, fit)
+    if isinstance(model, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
+        return fit_lognormal_mixture_vb(dataset, model, fit)
     if isinstance(model, SplitNormalMixtureSetting):
         return fit_splitnormal_mixture_vb(dataset, model, fit)
     if isinstance(model, SplitTMixtureSetting):
@@ -1100,6 +1442,14 @@ def _gaussian_params_to_tree(params: GaussianMixtureParams) -> dict[str, jnp.nda
     return {
         "mean_coef": params.mean_coef,
         "log_variance_coef": params.log_variance_coef,
+        "gating_coef": params.gating_coef,
+    }
+
+
+def _lognormal_params_to_tree(params: LogNormalMixtureParams) -> dict[str, jnp.ndarray]:
+    return {
+        "mean_coef": params.mean_coef,
+        "scale_coef": params.scale_coef,
         "gating_coef": params.gating_coef,
     }
 
@@ -1161,6 +1511,17 @@ def _mean_field_gaussian_entropy(log_std_tree: dict[str, jnp.ndarray]) -> jnp.nd
 def _raw_gaussian_mixture_designs(
     dataset: Dataset,
     setting: GaussianMixtureSetting,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return (
+        dataset.X[:, setting.covs[0]],
+        dataset.X[:, setting.covs[1]],
+        dataset.X[:, setting.covs_mix],
+    )
+
+
+def _raw_lognormal_mixture_designs(
+    dataset: Dataset,
+    setting: LogNormalMixtureSetting | LogNormalRepMixtureSetting,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return (
         dataset.X[:, setting.covs[0]],
@@ -1272,6 +1633,44 @@ def _build_variational_result(
     )
 
 
+def _build_lognormal_variational_result(
+    variational_tree: dict[str, dict[str, jnp.ndarray]],
+    inputs: LogNormalMixtureInputs,
+    setting: LogNormalMixtureSetting | LogNormalRepMixtureSetting,
+    history: np.ndarray,
+    converged: bool,
+) -> VariationalResult:
+    posterior = tree_to_lognormal_posterior(variational_tree)
+    y = jnp.asarray(inputs.y)
+    X_mean = jnp.asarray(inputs.X_mean)
+    X_scale = jnp.asarray(inputs.X_scale)
+    Z = jnp.asarray(inputs.Z)
+    resp = lognormal_responsibilities(
+        posterior.mean,
+        y,
+        X_mean,
+        X_scale,
+        Z,
+        reparameterized=setting.reparameterized,
+    )
+    pred_mean, pred_var = lognormal_predict_mean_variance(
+        posterior.mean,
+        X_mean,
+        X_scale,
+        Z,
+        reparameterized=setting.reparameterized,
+    )
+    return VariationalResult(
+        params=posterior.mean,
+        posterior=posterior,
+        elbo_history=history,
+        converged=converged,
+        responsibilities=np.asarray(resp),
+        predictive_mean=np.asarray(pred_mean),
+        predictive_variance=np.asarray(pred_var),
+    )
+
+
 def _build_splitt_variational_result(
     variational_tree: dict[str, dict[str, jnp.ndarray]],
     inputs: SplitTMixtureInputs,
@@ -1342,3 +1741,8 @@ def _jitter_params(params: dict[str, jnp.ndarray], seed: int) -> dict[str, jnp.n
         name: value + jnp.asarray(0.01 * rng.standard_normal(value.shape))
         for name, value in params.items()
     }
+
+
+def _validate_positive_response(y: np.ndarray) -> None:
+    if np.any(np.asarray(y).reshape(-1) <= 0.0):
+        raise ValueError("LogNorm and LogNormRep require strictly positive responses")

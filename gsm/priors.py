@@ -36,6 +36,15 @@ class GaussianMixtureCoefficientPriors:
 
 
 @dataclass(frozen=True)
+class LogNormalMixtureCoefficientPriors:
+    """Coefficient priors for lognormal and reparameterized lognormal mixtures."""
+
+    mean: GaussianCoefficientPrior
+    scale: GaussianCoefficientPrior
+    gating: GaussianCoefficientPrior | None
+
+
+@dataclass(frozen=True)
 class SplitTMixtureCoefficientPriors:
     """Coefficient priors for the split-t mixture scaffold."""
 
@@ -193,6 +202,35 @@ def build_gaussian_mixture_priors(
             setting.link_types[1],
             setting.prior_shrink[1],
             unit_info_diag[1],
+        ),
+        gating=build_gating_prior(
+            inputs.Z,
+            setting.n_components,
+            setting.prior_shrink_mix,
+        ),
+    )
+
+
+def build_lognormal_mixture_priors(
+    inputs: Any,
+    setting: Any,
+) -> LogNormalMixtureCoefficientPriors:
+    """Build all coefficient priors needed by lognormal mixture VB fits."""
+
+    return LogNormalMixtureCoefficientPriors(
+        mean=build_gaussian_coefficient_prior(
+            inputs.X_mean,
+            setting.prior_mean_feat[0],
+            setting.prior_std_feat[0],
+            setting.link_types[0],
+            setting.prior_shrink[0],
+        ),
+        scale=build_gaussian_coefficient_prior(
+            inputs.X_scale,
+            setting.prior_mean_feat[1],
+            setting.prior_std_feat[1],
+            setting.link_types[1],
+            setting.prior_shrink[1],
         ),
         gating=build_gating_prior(
             inputs.Z,

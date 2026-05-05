@@ -72,6 +72,54 @@ class GaussianMixtureSetting:
 
 
 @dataclass(frozen=True)
+class LogNormalMixtureSetting:
+    """Minimal Python version of MATLAB's ``LogNorm`` GSM setting."""
+
+    model_name: str = "LogNorm"
+    data_file_name: str = "simpleUnivDens"
+    feature_names: tuple[str, str] = ("Mean", "Scale")
+    link_types: tuple[str, str] = ("log", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...]] = ((0,), (0,))
+    covs_mix: tuple[int, ...] = (0,)
+    on_trial: tuple[tuple[int, ...], tuple[int, ...]] = ((), ())
+    on_trial_mix: tuple[int, ...] = ()
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float, float] = (math.log(361.0), math.log(176.377))
+    prior_std_feat: tuple[float, float] = (math.log(100.0), math.log(100.0))
+    prior_shrink: tuple[float | str, float | str] = ("UnitInfo", "UnitInfo")
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float, float] = (0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+    reparameterized: bool = False
+
+
+@dataclass(frozen=True)
+class LogNormalRepMixtureSetting:
+    """Minimal Python version of MATLAB's ``LogNormRep`` GSM setting."""
+
+    model_name: str = "LogNormRep"
+    data_file_name: str = "simpleUnivDens"
+    feature_names: tuple[str, str] = ("Mean", "Scale")
+    link_types: tuple[str, str] = ("log", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...]] = ((0,), (0,))
+    covs_mix: tuple[int, ...] = (0,)
+    on_trial: tuple[tuple[int, ...], tuple[int, ...]] = ((), ())
+    on_trial_mix: tuple[int, ...] = ()
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float, float] = (361.0, 176.377)
+    prior_std_feat: tuple[float, float] = (100.0, 100.0)
+    prior_shrink: tuple[float | str, float | str] = ("UnitInfo", "UnitInfo")
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float, float] = (0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+    reparameterized: bool = True
+
+
+@dataclass(frozen=True)
 class SplitTMixtureSetting:
     """Minimal Python version of MATLAB's asymmetric Student-t GSM setting.
 
@@ -148,6 +196,18 @@ def hetero_gaussian_setting(n_components: int = 2) -> GaussianMixtureSetting:
     """Return the default HeteroGauss setting with an adjustable component count."""
 
     return GaussianMixtureSetting(n_components=n_components)
+
+
+def lognormal_mixture_setting(n_components: int = 2) -> LogNormalMixtureSetting:
+    """Return MATLAB ``LogNorm`` defaults with an adjustable component count."""
+
+    return LogNormalMixtureSetting(n_components=n_components)
+
+
+def lognormal_rep_mixture_setting(n_components: int = 2) -> LogNormalRepMixtureSetting:
+    """Return MATLAB ``LogNormRep`` defaults with an adjustable component count."""
+
+    return LogNormalRepMixtureSetting(n_components=n_components)
 
 
 def sp500_gaussian_mixture_setting(n_components: int = 3) -> GaussianMixtureSetting:

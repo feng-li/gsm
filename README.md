@@ -97,7 +97,7 @@ gsm/
   links.py                  # link and inverse-link functions
   variational.py            # Gaussian-mixture VB fitting
   models/
-    gaussian_mixture.py     # Gaussian mixture log-density and predictions
+    gaussian.py             # Gaussian mixture log-density and predictions
     poisson.py              # early migration kernel
     negbin.py               # early migration kernel
 scripts/

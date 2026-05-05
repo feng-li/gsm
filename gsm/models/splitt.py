@@ -7,7 +7,7 @@ from jax.nn import logsumexp
 from jax.scipy.special import betaln
 
 from gsm.links import inverse_link
-from gsm.models.gaussian_mixture import log_mixture_weights
+from gsm.models.gaussian import log_mixture_weights
 
 
 @dataclass(frozen=True)
