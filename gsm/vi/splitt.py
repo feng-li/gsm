@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -25,11 +24,10 @@ from gsm.vi.common import (
     standardize_designs,
 )
 from gsm.vi.engine import (
-    jitter_params,
-    mean_field_gaussian_entropy,
-    optax_maximize,
-    sample_noise_like,
-    sample_param_trees,
+    initialize_mean_field_variational_params,
+    monte_carlo_variational_elbo,
+    optimize_restarts,
+    sample_posterior_tree,
 )
 
 
@@ -162,11 +160,7 @@ def initialize_splitt_mixture_variational_params(
     """Initialize a diagonal Gaussian variational family for split-t mixtures."""
 
     mean_tree = initialize_splitt_mixture_params(inputs, setting)
-    log_std_tree = jax.tree_util.tree_map(
-        lambda value: jnp.full_like(value, init_log_std),
-        mean_tree,
-    )
-    return {"mean": mean_tree, "log_std": log_std_tree}
+    return initialize_mean_field_variational_params(mean_tree, init_log_std)
 
 
 
@@ -272,12 +266,6 @@ def splitt_mixture_variational_elbo(
 ) -> jnp.ndarray:
     """Monte Carlo ELBO for a split-t mean-field Gaussian posterior."""
 
-    sample_tree = sample_param_trees(
-        variational_tree["mean"],
-        variational_tree["log_std"],
-        noise_tree,
-    )
-
     def sample_log_joint(param_tree):
         return splitt_mixture_elbo(
             param_tree,
@@ -289,8 +277,7 @@ def splitt_mixture_variational_elbo(
             coefficient_priors=coefficient_priors,
         )
 
-    log_joint = jax.vmap(sample_log_joint)(sample_tree)
-    return jnp.mean(log_joint) + mean_field_gaussian_entropy(variational_tree["log_std"])
+    return monte_carlo_variational_elbo(variational_tree, noise_tree, sample_log_joint)
 
 
 
@@ -301,12 +288,7 @@ def sample_splitt_mixture_posterior(
 ) -> dict[str, jnp.ndarray]:
     """Draw coefficient trees from a fitted split-t mean-field posterior."""
 
-    if n_samples < 1:
-        raise ValueError("n_samples must be positive")
-    mean_tree = _splitt_params_to_tree(posterior.mean)
-    log_std_tree = _splitt_params_to_tree(posterior.log_std)
-    noise_tree = sample_noise_like(mean_tree, jax.random.PRNGKey(seed), n_samples)
-    return sample_param_trees(mean_tree, log_std_tree, noise_tree)
+    return sample_posterior_tree(posterior, _splitt_params_to_tree, seed, n_samples)
 
 
 def _splitt_params_to_tree(params: SplitTMixtureParams) -> dict[str, jnp.ndarray]:
@@ -328,33 +310,16 @@ def fit_splitt_mixture_vb(
     """Fit the split-t mixture scaffold with JAX gradients and local Adam."""
 
     fit = fit or FitConfig()
-    if fit.n_elbo_samples < 1:
-        raise ValueError("n_elbo_samples must be positive")
-
     inputs = prepare_splitt_mixture_inputs(dataset, setting)
     coefficient_priors = build_splitt_mixture_priors(inputs, setting)
-    best_result: VariationalResult | None = None
-
-    for restart in range(fit.n_restarts):
-        variational_params = initialize_splitt_mixture_variational_params(
+    return optimize_restarts(
+        fit,
+        lambda: initialize_splitt_mixture_variational_params(
             inputs,
             setting,
             init_log_std=fit.posterior_init_log_std,
-        )
-        if restart:
-            variational_params["mean"] = jitter_params(
-                variational_params["mean"],
-                fit.seed + restart,
-            )
-
-        noise_tree = sample_noise_like(
-            variational_params["mean"],
-            jax.random.PRNGKey(fit.seed + 1009 * (restart + 1)),
-            fit.n_elbo_samples,
-        )
-        variational_params, history, converged = optax_maximize(
-            variational_params,
-            lambda q: splitt_mixture_variational_elbo(
+        ),
+        lambda noise_tree: lambda q: splitt_mixture_variational_elbo(
                 q,
                 inputs,
                 noise_tree,
@@ -364,17 +329,10 @@ def fit_splitt_mixture_vb(
                 ard_rate=fit.ard_rate,
                 coefficient_priors=coefficient_priors,
             ),
-            max_iter=fit.max_iter,
-            learning_rate=fit.learning_rate,
-            tol=fit.tol,
-        )
-        result = _build_splitt_variational_result(variational_params, inputs, history, converged)
-        if best_result is None or result.elbo_history[-1] > best_result.elbo_history[-1]:
-            best_result = result
-
-    if best_result is None:
-        raise RuntimeError("no variational optimization runs were executed")
-    return best_result
+        lambda variational_params, history, converged: _build_splitt_variational_result(
+            variational_params, inputs, history, converged
+        ),
+    )
 
 
 
