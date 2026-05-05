@@ -16,7 +16,7 @@ from gsm.models.lognormal import (
 from gsm.priors import (
     LogNormalMixtureCoefficientPriors,
     build_lognormal_mixture_priors,
-    coefficient_log_prior,
+    coefficient_log_prior_sum,
 )
 from gsm.vi.common import (
     VariationalResult,
@@ -190,34 +190,29 @@ def lognormal_mixture_elbo(
         Z,
         reparameterized=setting.reparameterized,
     )
-    log_prior = (
-        coefficient_log_prior(
-            param_tree["mean_coef"],
-            inputs.X_mean,
-            coefficient_prior_scale,
-            use_ard,
-            ard_shape,
-            ard_rate,
-            coefficient_priors.mean if coefficient_priors is not None else None,
-        )
-        + coefficient_log_prior(
-            param_tree["scale_coef"],
-            inputs.X_scale,
-            coefficient_prior_scale,
-            use_ard,
-            ard_shape,
-            ard_rate,
-            coefficient_priors.scale if coefficient_priors is not None else None,
-        )
-        + coefficient_log_prior(
-            param_tree["gating_coef"],
-            inputs.Z,
-            coefficient_prior_scale,
-            use_ard,
-            ard_shape,
-            ard_rate,
-            coefficient_priors.gating if coefficient_priors is not None else None,
-        )
+    log_prior = coefficient_log_prior_sum(
+        param_tree,
+        (
+            (
+                "mean_coef",
+                inputs.X_mean,
+                coefficient_priors.mean if coefficient_priors is not None else None,
+            ),
+            (
+                "scale_coef",
+                inputs.X_scale,
+                coefficient_priors.scale if coefficient_priors is not None else None,
+            ),
+            (
+                "gating_coef",
+                inputs.Z,
+                coefficient_priors.gating if coefficient_priors is not None else None,
+            ),
+        ),
+        coefficient_prior_scale,
+        use_ard,
+        ard_shape,
+        ard_rate,
     )
     return log_likelihood + log_prior
 

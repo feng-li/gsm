@@ -16,7 +16,7 @@ from gsm.models.splitnormal import (
 from gsm.priors import (
     SplitNormalMixtureCoefficientPriors,
     build_splitnormal_mixture_priors,
-    coefficient_log_prior,
+    coefficient_log_prior_sum,
 )
 from gsm.vi.common import (
     VariationalResult,
@@ -182,43 +182,34 @@ def splitnormal_mixture_elbo(
     Z = jnp.asarray(inputs.Z)
 
     log_likelihood = splitnormal_log_prob(params, y, X_mean, X_scale, X_skewness, Z)
-    log_prior = (
-        coefficient_log_prior(
-            param_tree["mean_coef"],
-            inputs.X_mean,
-            coefficient_prior_scale,
-            use_ard,
-            ard_shape,
-            ard_rate,
-            coefficient_priors.mean if coefficient_priors is not None else None,
-        )
-        + coefficient_log_prior(
-            param_tree["scale_coef"],
-            inputs.X_scale,
-            coefficient_prior_scale,
-            use_ard,
-            ard_shape,
-            ard_rate,
-            coefficient_priors.scale if coefficient_priors is not None else None,
-        )
-        + coefficient_log_prior(
-            param_tree["skewness_coef"],
-            inputs.X_skewness,
-            coefficient_prior_scale,
-            use_ard,
-            ard_shape,
-            ard_rate,
-            coefficient_priors.skewness if coefficient_priors is not None else None,
-        )
-        + coefficient_log_prior(
-            param_tree["gating_coef"],
-            inputs.Z,
-            coefficient_prior_scale,
-            use_ard,
-            ard_shape,
-            ard_rate,
-            coefficient_priors.gating if coefficient_priors is not None else None,
-        )
+    log_prior = coefficient_log_prior_sum(
+        param_tree,
+        (
+            (
+                "mean_coef",
+                inputs.X_mean,
+                coefficient_priors.mean if coefficient_priors is not None else None,
+            ),
+            (
+                "scale_coef",
+                inputs.X_scale,
+                coefficient_priors.scale if coefficient_priors is not None else None,
+            ),
+            (
+                "skewness_coef",
+                inputs.X_skewness,
+                coefficient_priors.skewness if coefficient_priors is not None else None,
+            ),
+            (
+                "gating_coef",
+                inputs.Z,
+                coefficient_priors.gating if coefficient_priors is not None else None,
+            ),
+        ),
+        coefficient_prior_scale,
+        use_ard,
+        ard_shape,
+        ard_rate,
     )
     return log_likelihood + log_prior
 

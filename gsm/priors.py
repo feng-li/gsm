@@ -430,6 +430,33 @@ def coefficient_log_prior(
     return constant_prior + ard_prior
 
 
+def coefficient_log_prior_sum(
+    param_tree: dict[str, jnp.ndarray],
+    specs,
+    coefficient_prior_scale: float,
+    use_ard: bool,
+    ard_shape: float,
+    ard_rate: float,
+) -> jnp.ndarray:
+    """Sum coefficient priors for a model ELBO.
+
+    Each spec is ``(coefficient_name, design_matrix, prior_or_none)``.
+    """
+
+    total = jnp.asarray(0.0)
+    for coefficient_name, design_matrix, prior in specs:
+        total = total + coefficient_log_prior(
+            param_tree[coefficient_name],
+            design_matrix,
+            coefficient_prior_scale,
+            use_ard,
+            ard_shape,
+            ard_rate,
+            prior,
+        )
+    return total
+
+
 def _constant_column_gaussian_log_prob(
     value: jnp.ndarray,
     prior: GaussianCoefficientPrior,
