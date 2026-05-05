@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gsm.config import FitConfig, LogNormalMixtureSetting, LogNormalRepMixtureSetting
-from gsm.data import Dataset, standardize_covariates
+from gsm.data import Dataset
 from gsm.models.lognormal import (
     LogNormalMixtureParams,
     log_prob as lognormal_log_prob,
@@ -21,7 +21,8 @@ from gsm.priors import (
 )
 from gsm.vi.common import (
     VariationalResult,
-    apply_standardization,
+    fit_design_standardization,
+    standardize_designs,
     validate_positive_response,
 )
 from gsm.vi.engine import (
@@ -74,37 +75,17 @@ def prepare_lognormal_mixture_inputs(
 
     validate_positive_response(dataset.y)
     X_mean, X_scale, Z = _raw_lognormal_mixture_designs(dataset, setting)
-
-    if setting.standardize:
-        if standardization is None:
-            X_mean, _, _ = standardize_covariates(X_mean, setting.standardize)
-            X_scale, _, _ = standardize_covariates(X_scale, setting.standardize)
-            Z, _, _ = standardize_covariates(Z, setting.standardize)
-        else:
-            X_mean = apply_standardization(
-                X_mean,
-                setting.standardize,
-                standardization.X_mean_c1,
-                standardization.X_mean_c2,
-            )
-            X_scale = apply_standardization(
-                X_scale,
-                setting.standardize,
-                standardization.X_scale_c1,
-                standardization.X_scale_c2,
-            )
-            Z = apply_standardization(
-                Z,
-                setting.standardize,
-                standardization.Z_c1,
-                standardization.Z_c2,
-            )
+    designs = standardize_designs(
+        {"X_mean": X_mean, "X_scale": X_scale, "Z": Z},
+        setting.standardize,
+        standardization,
+    )
 
     return LogNormalMixtureInputs(
         y=dataset.y.reshape(-1),
-        X_mean=X_mean,
-        X_scale=X_scale,
-        Z=Z,
+        X_mean=designs["X_mean"],
+        X_scale=designs["X_scale"],
+        Z=designs["Z"],
     )
 
 
@@ -116,16 +97,11 @@ def fit_lognormal_mixture_standardization(
     """Fit the lognormal model-specific scaling constants."""
 
     X_mean, X_scale, Z = _raw_lognormal_mixture_designs(dataset, setting)
-    _, X_mean_c1, X_mean_c2 = standardize_covariates(X_mean, setting.standardize)
-    _, X_scale_c1, X_scale_c2 = standardize_covariates(X_scale, setting.standardize)
-    _, Z_c1, Z_c2 = standardize_covariates(Z, setting.standardize)
     return LogNormalMixtureStandardization(
-        X_mean_c1=X_mean_c1,
-        X_mean_c2=X_mean_c2,
-        X_scale_c1=X_scale_c1,
-        X_scale_c2=X_scale_c2,
-        Z_c1=Z_c1,
-        Z_c2=Z_c2,
+        **fit_design_standardization(
+            {"X_mean": X_mean, "X_scale": X_scale, "Z": Z},
+            setting.standardize,
+        ),
     )
 
 

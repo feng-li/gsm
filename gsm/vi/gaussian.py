@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gsm.config import FitConfig, GaussianMixtureSetting
-from gsm.data import Dataset, standardize_covariates
+from gsm.data import Dataset
 from gsm.models.gaussian import (
     GaussianMixtureParams,
     log_prob as gaussian_log_prob,
@@ -19,7 +19,11 @@ from gsm.priors import (
     build_gaussian_mixture_priors,
     coefficient_log_prior,
 )
-from gsm.vi.common import VariationalResult, apply_standardization
+from gsm.vi.common import (
+    VariationalResult,
+    fit_design_standardization,
+    standardize_designs,
+)
 from gsm.vi.engine import (
     jitter_params,
     mean_field_gaussian_entropy,
@@ -67,37 +71,17 @@ def prepare_gaussian_mixture_inputs(
     """Build feature-specific design matrices from a loaded dataset."""
 
     X_mean, X_variance, Z = _raw_gaussian_mixture_designs(dataset, setting)
-
-    if setting.standardize:
-        if standardization is None:
-            X_mean, _, _ = standardize_covariates(X_mean, setting.standardize)
-            X_variance, _, _ = standardize_covariates(X_variance, setting.standardize)
-            Z, _, _ = standardize_covariates(Z, setting.standardize)
-        else:
-            X_mean = apply_standardization(
-                X_mean,
-                setting.standardize,
-                standardization.X_mean_c1,
-                standardization.X_mean_c2,
-            )
-            X_variance = apply_standardization(
-                X_variance,
-                setting.standardize,
-                standardization.X_variance_c1,
-                standardization.X_variance_c2,
-            )
-            Z = apply_standardization(
-                Z,
-                setting.standardize,
-                standardization.Z_c1,
-                standardization.Z_c2,
-            )
+    designs = standardize_designs(
+        {"X_mean": X_mean, "X_variance": X_variance, "Z": Z},
+        setting.standardize,
+        standardization,
+    )
 
     return GaussianMixtureInputs(
         y=dataset.y.reshape(-1),
-        X_mean=X_mean,
-        X_variance=X_variance,
-        Z=Z,
+        X_mean=designs["X_mean"],
+        X_variance=designs["X_variance"],
+        Z=designs["Z"],
     )
 
 
@@ -109,16 +93,11 @@ def fit_gaussian_mixture_standardization(
     """Fit the model-specific scaling constants used by the design matrices."""
 
     X_mean, X_variance, Z = _raw_gaussian_mixture_designs(dataset, setting)
-    _, X_mean_c1, X_mean_c2 = standardize_covariates(X_mean, setting.standardize)
-    _, X_variance_c1, X_variance_c2 = standardize_covariates(X_variance, setting.standardize)
-    _, Z_c1, Z_c2 = standardize_covariates(Z, setting.standardize)
     return GaussianMixtureStandardization(
-        X_mean_c1=X_mean_c1,
-        X_mean_c2=X_mean_c2,
-        X_variance_c1=X_variance_c1,
-        X_variance_c2=X_variance_c2,
-        Z_c1=Z_c1,
-        Z_c2=Z_c2,
+        **fit_design_standardization(
+            {"X_mean": X_mean, "X_variance": X_variance, "Z": Z},
+            setting.standardize,
+        ),
     )
 
 

@@ -5,6 +5,8 @@ from typing import Any
 
 import numpy as np
 
+from gsm.data import standardize_covariates
+
 
 @dataclass(frozen=True)
 class VariationalResult:
@@ -46,6 +48,44 @@ def apply_standardization(
     else:
         raise ValueError(f"unknown standardization method: {method}")
     return X
+
+
+def standardize_designs(
+    designs: dict[str, np.ndarray],
+    method: int,
+    standardization: Any | None = None,
+) -> dict[str, np.ndarray]:
+    """Fit or apply standardization to named feature design matrices."""
+
+    if not method:
+        return designs
+
+    standardized: dict[str, np.ndarray] = {}
+    for name, design in designs.items():
+        if standardization is None:
+            standardized[name], _, _ = standardize_covariates(design, method)
+        else:
+            standardized[name] = apply_standardization(
+                design,
+                method,
+                getattr(standardization, f"{name}_c1"),
+                getattr(standardization, f"{name}_c2"),
+            )
+    return standardized
+
+
+def fit_design_standardization(
+    designs: dict[str, np.ndarray],
+    method: int,
+) -> dict[str, np.ndarray]:
+    """Return ``*_c1`` and ``*_c2`` kwargs for a standardization dataclass."""
+
+    stats: dict[str, np.ndarray] = {}
+    for name, design in designs.items():
+        _, c1, c2 = standardize_covariates(design, method)
+        stats[f"{name}_c1"] = c1
+        stats[f"{name}_c2"] = c2
+    return stats
 
 
 def validate_positive_response(y: np.ndarray) -> None:
