@@ -95,7 +95,14 @@ gsm/
   data.py                   # CSV/.mat loading, splits, standardization
   evaluation.py             # posterior-sampled predictive scores
   links.py                  # link and inverse-link functions
-  variational.py            # Gaussian-mixture VB fitting
+  variational.py            # public VB facade and model dispatch
+  vi/
+    common.py               # shared VB result and preprocessing helpers
+    engine.py               # shared optimizer and posterior sampling helpers
+    gaussian.py             # Gaussian-mixture VB fitting
+    lognormal.py            # LogNorm/LogNormRep VB fitting
+    splitnormal.py          # split-normal VB fitting
+    splitt.py               # split-t VB fitting
   models/
     gaussian.py             # Gaussian mixture log-density and predictions
     poisson.py              # early migration kernel

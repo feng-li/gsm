@@ -178,7 +178,7 @@ file. The helper converts feature priors to link scale with
 Edit:
 
 ```text
-gsm/variational.py
+gsm/vi/<model_name>.py
 ```
 
 Add the same small set of functions the current models use:
@@ -198,7 +198,8 @@ Add the same small set of functions the current models use:
 - `fit_new_mixture_vb`
 - `_build_new_variational_result`
 
-Finally add the model to `fit_variational`.
+Finally export the public names from `gsm/variational.py` and add the model to
+`fit_variational`.
 
 The ELBO should have this form:
 
@@ -215,13 +216,13 @@ return log_likelihood + log_prior
 The variational objective should keep the current mean-field Gaussian pattern:
 
 ```python
-sample_tree = _sample_param_trees(
+sample_tree = sample_param_trees(
     variational_tree["mean"],
     variational_tree["log_std"],
     noise_tree,
 )
 log_joint = jax.vmap(sample_log_joint)(sample_tree)
-return jnp.mean(log_joint) + _mean_field_gaussian_entropy(variational_tree["log_std"])
+return jnp.mean(log_joint) + mean_field_gaussian_entropy(variational_tree["log_std"])
 ```
 
 ### 5. Add Predictive Scoring
