@@ -122,6 +122,7 @@ data/
 ## Literature
 
 - Villani, M., Kohn, R., & Nott, D. J. (2012). Generalized Smooth Finite Mixtures. Journal of Econometrics, 171(2), 121–133. https://doi.org/10.1016/j.jeconom.2012.06.012
+- Nott, D. J., Tan, S. L., Villani, M., & Kohn, R. (2012). Regression Density Estimation With Variational Methods and Stochastic Approximation. Journal of Computational and Graphical Statistics, 21(3), 797–820. https://doi.org/10.1080/10618600.2012.679897
 - Li, F., Villani, M., & Kohn, R. (2011). Modeling conditional densities using finite smooth mixtures. In K. Mengersen, C. Robert, & M. Titterington (Eds.), Mixtures: Estimation and applications (pp. 123–144). John Wiley & Sons Inc, Chichester. https://doi.org/10.1002/9781119995678.ch6
 - Li, F., Villani, M. and Kohn, R. (2010). Flexible modeling of conditional distributions using smooth mixtures of asymmetric Student t densities. Journal
   of Statistical Planning and Inference, 140(12), 3638-3654. https://doi.org/10.1016/j.jspi.2010.04.031.
