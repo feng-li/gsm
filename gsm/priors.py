@@ -37,7 +37,7 @@ class GaussianMixtureCoefficientPriors:
 
 @dataclass(frozen=True)
 class LogNormalMixtureCoefficientPriors:
-    """Coefficient priors for lognormal and reparameterized lognormal mixtures."""
+    """Coefficient priors for standard and response-scale lognormal mixtures."""
 
     mean: GaussianCoefficientPrior
     scale: GaussianCoefficientPrior

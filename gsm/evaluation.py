@@ -260,7 +260,7 @@ def _pointwise_log_prob(params, inputs, setting: ModelSetting):
             jnp.asarray(inputs.X_mean),
             jnp.asarray(inputs.X_scale),
             jnp.asarray(inputs.Z),
-            reparameterized=setting.reparameterized,
+            parameterization=setting.parameterization,
         )
     if isinstance(setting, SplitNormalMixtureSetting):
         return splitnormal_log_prob_observations(

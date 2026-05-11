@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 import math
+from typing import Literal
 
 
 @dataclass
@@ -92,7 +93,7 @@ class LogNormalMixtureSetting:
     prior_shrink_mix: float | str = "UnitInfo"
     prior_inclusion: tuple[float, float] = (0.5, 0.5)
     prior_inclusion_mix: float = 0.5
-    reparameterized: bool = False
+    parameterization: Literal["standard", "response"] = "standard"
 
 
 @dataclass(frozen=True)
@@ -116,7 +117,7 @@ class LogNormalRepMixtureSetting:
     prior_shrink_mix: float | str = "UnitInfo"
     prior_inclusion: tuple[float, float] = (0.5, 0.5)
     prior_inclusion_mix: float = 0.5
-    reparameterized: bool = True
+    parameterization: Literal["standard", "response"] = "response"
 
 
 @dataclass(frozen=True)

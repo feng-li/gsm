@@ -1,12 +1,15 @@
 """Lognormal mixture kernels for MATLAB's LogNorm and LogNormRep models."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 import jax.numpy as jnp
 from jax.nn import logsumexp
 
 from gsm.links import inverse_link
 from gsm.models.gaussian import log_mixture_weights
+
+LogNormalParameterization = Literal["standard", "response"]
 
 
 @dataclass(frozen=True)
@@ -26,14 +29,26 @@ def component_features(params: LogNormalMixtureParams, X_mean, X_scale):
     return _positive(mean), _positive(scale)
 
 
-def component_log_prob(y, mean, scale):
-    """LogNorm log density with ``log(y) ~ N(mean, scale**2)``."""
+def component_log_prob(
+    y,
+    mean,
+    scale,
+    parameterization: LogNormalParameterization = "standard",
+):
+    """Lognormal log density under the selected feature parameterization."""
+
+    location, log_scale = to_standard_lognormal_params(mean, scale, parameterization)
+    return _standard_lognormal_log_prob(y, location, log_scale)
+
+
+def _standard_lognormal_log_prob(y, location, scale):
+    """Log density for ``log(y) ~ N(location, scale**2)``."""
 
     y = jnp.asarray(y).reshape((-1, 1))
     safe_y = jnp.maximum(y, jnp.finfo(y.dtype).tiny)
     log_y = jnp.log(safe_y)
     log_density = (
-        -0.5 * ((log_y - mean) / scale) ** 2
+        -0.5 * ((log_y - location) / scale) ** 2
         - jnp.log(scale)
         - 0.5 * jnp.log(2.0 * jnp.pi)
         - log_y
@@ -41,11 +56,18 @@ def component_log_prob(y, mean, scale):
     return jnp.where(y > 0.0, log_density, -jnp.inf)
 
 
-def component_log_prob_reparameterized(y, mean, scale):
-    """LogNormRep log density, parameterized by response-scale mean and sd."""
+def to_standard_lognormal_params(
+    mean,
+    scale,
+    parameterization: LogNormalParameterization,
+):
+    """Map LogNorm or LogNormRep features to lognormal location and scale."""
 
-    location, log_scale = standard_lognormal_params(mean, scale)
-    return component_log_prob(y, location, log_scale)
+    if parameterization == "standard":
+        return mean, scale
+    if parameterization == "response":
+        return standard_lognormal_params(mean, scale)
+    raise ValueError(f"unknown lognormal parameterization: {parameterization}")
 
 
 def standard_lognormal_params(mean, scale):
@@ -65,16 +87,12 @@ def responsibilities(
     X_mean,
     X_scale,
     Z,
-    reparameterized: bool = False,
+    parameterization: LogNormalParameterization = "standard",
 ):
     """Return posterior component responsibilities."""
 
     mean, scale = component_features(params, X_mean, X_scale)
-    comp_lp = (
-        component_log_prob_reparameterized(y, mean, scale)
-        if reparameterized
-        else component_log_prob(y, mean, scale)
-    )
+    comp_lp = component_log_prob(y, mean, scale, parameterization)
     logits = log_mixture_weights(params.gating_coef, Z) + comp_lp
     return jnp.exp(logits - logsumexp(logits, axis=1, keepdims=True))
 
@@ -85,16 +103,12 @@ def log_prob_observations(
     X_mean,
     X_scale,
     Z,
-    reparameterized: bool = False,
+    parameterization: LogNormalParameterization = "standard",
 ):
     """Return pointwise marginal log likelihoods."""
 
     mean, scale = component_features(params, X_mean, X_scale)
-    comp_lp = (
-        component_log_prob_reparameterized(y, mean, scale)
-        if reparameterized
-        else component_log_prob(y, mean, scale)
-    )
+    comp_lp = component_log_prob(y, mean, scale, parameterization)
     log_w = log_mixture_weights(params.gating_coef, Z)
     return logsumexp(log_w + comp_lp, axis=1)
 
@@ -105,12 +119,12 @@ def log_prob(
     X_mean,
     X_scale,
     Z,
-    reparameterized: bool = False,
+    parameterization: LogNormalParameterization = "standard",
 ):
     """Marginal log likelihood with mixture allocations integrated out."""
 
     return jnp.sum(
-        log_prob_observations(params, y, X_mean, X_scale, Z, reparameterized)
+        log_prob_observations(params, y, X_mean, X_scale, Z, parameterization)
     )
 
 
@@ -119,17 +133,19 @@ def predict_mean_variance(
     X_mean,
     X_scale,
     Z,
-    reparameterized: bool = False,
+    parameterization: LogNormalParameterization = "standard",
 ):
     """Return mixture predictive mean and variance."""
 
     mean, scale = component_features(params, X_mean, X_scale)
-    if reparameterized:
+    if parameterization == "response":
         component_mean = mean
         component_variance = scale**2
-    else:
+    elif parameterization == "standard":
         component_mean = jnp.exp(mean + 0.5 * scale**2)
         component_variance = jnp.exp(2.0 * mean + scale**2) * jnp.expm1(scale**2)
+    else:
+        raise ValueError(f"unknown lognormal parameterization: {parameterization}")
 
     weights = jnp.exp(log_mixture_weights(params.gating_coef, Z))
     pred_mean = jnp.sum(weights * component_mean, axis=1)

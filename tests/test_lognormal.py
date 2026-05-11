@@ -12,7 +12,6 @@ from gsm.data import Dataset
 from gsm.models.lognormal import (
     LogNormalMixtureParams,
     component_log_prob,
-    component_log_prob_reparameterized,
     log_prob,
     predict_mean_variance,
 )
@@ -27,10 +26,10 @@ def test_lognormal_settings_match_matlab_defaults():
     assert setting.feature_names == ("Mean", "Scale")
     assert setting.link_types == ("log", "log")
     assert setting.prior_mean_feat == (np.log(361.0), np.log(176.377))
-    assert not setting.reparameterized
+    assert setting.parameterization == "standard"
     assert rep_setting.model_name == "LogNormRep"
     assert rep_setting.prior_mean_feat == (361.0, 176.377)
-    assert rep_setting.reparameterized
+    assert rep_setting.parameterization == "response"
 
 
 def test_lognormal_component_log_prob_matches_formula():
@@ -49,7 +48,7 @@ def test_lognormal_component_log_prob_matches_formula():
     np.testing.assert_allclose(actual, expected)
 
 
-def test_lognormal_reparameterized_moments():
+def test_lognormal_response_parameterization_moments():
     X = jnp.ones((3, 1))
     params = LogNormalMixtureParams(
         mean_coef=jnp.log(jnp.array([[2.0]])),
@@ -62,12 +61,19 @@ def test_lognormal_reparameterized_moments():
         X,
         X,
         X,
-        reparameterized=True,
+        parameterization="response",
     )
 
     np.testing.assert_allclose(pred_mean, np.full(3, 2.0))
     np.testing.assert_allclose(pred_variance, np.full(3, 0.25))
-    assert np.isfinite(component_log_prob_reparameterized(jnp.array([2.0]), 2.0, 0.5))
+    assert np.isfinite(
+        component_log_prob(
+            jnp.array([2.0]),
+            2.0,
+            0.5,
+            parameterization="response",
+        )
+    )
 
 
 def test_lognormal_nonpositive_y_returns_negative_infinity():

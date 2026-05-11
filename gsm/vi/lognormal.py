@@ -113,7 +113,7 @@ def initialize_lognormal_mixture_params(
     y = np.asarray(inputs.y)
     n_components = setting.n_components
     quantiles = np.linspace(0.15, 0.85, n_components)
-    if setting.reparameterized:
+    if setting.parameterization == "response":
         means = np.maximum(np.quantile(y, quantiles), 1e-6)
         scale = max(float(np.std(y, ddof=1)), 1e-3)
     else:
@@ -188,7 +188,7 @@ def lognormal_mixture_elbo(
         X_mean,
         X_scale,
         Z,
-        reparameterized=setting.reparameterized,
+        parameterization=setting.parameterization,
     )
     log_prior = coefficient_log_prior_sum(
         param_tree,
@@ -330,14 +330,14 @@ def _build_lognormal_variational_result(
         X_mean,
         X_scale,
         Z,
-        reparameterized=setting.reparameterized,
+        parameterization=setting.parameterization,
     )
     pred_mean, pred_var = lognormal_predict_mean_variance(
         posterior.mean,
         X_mean,
         X_scale,
         Z,
-        reparameterized=setting.reparameterized,
+        parameterization=setting.parameterization,
     )
     return VariationalResult(
         params=posterior.mean,
