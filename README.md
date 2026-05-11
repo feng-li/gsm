@@ -1,6 +1,6 @@
 # gsm
 
-The Python module `gsm` implements the covariate-dependent smooth mixture models developed by Mattias Villani, Feng Li, Matias Quiroz et al. The current implementation focuses on light-weighted fitting with variational Bayes in JAX.
+The Python module `gsm` implements the covariate-dependent smooth mixture models developed by [Mattias Villani](https://mattiasvillani.com/), [Feng Li](https://feng.li), [Robert Kohn](https://www.unsw.edu.au/staff/robert-kohn), et al. The current implementation focuses on light-weighted fitting with variational Bayes in JAX with both CPU and GPU support.
 
 The package is intentionally small while the implementation is underway. The Python
 target is variational inference rather than Metropolis-Hastings with Newton
