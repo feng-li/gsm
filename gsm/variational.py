@@ -5,6 +5,7 @@ existing import path stable while the migration grows.
 """
 
 from .config import (
+    BetaRegMixtureSetting,
     FitConfig,
     GaussianMixtureSetting,
     LogNormalMixtureSetting,
@@ -15,6 +16,21 @@ from .config import (
 )
 from .data import Dataset
 from .vi.common import VariationalResult
+from .vi.betareg import (
+    BetaRegMixtureInputs,
+    BetaRegMixturePosterior,
+    BetaRegMixtureStandardization,
+    betareg_mixture_elbo,
+    betareg_mixture_variational_elbo,
+    fit_betareg_mixture_standardization,
+    fit_betareg_mixture_vb,
+    initialize_betareg_mixture_params,
+    initialize_betareg_mixture_variational_params,
+    prepare_betareg_mixture_inputs,
+    sample_betareg_mixture_posterior,
+    tree_to_betareg_params,
+    tree_to_betareg_posterior,
+)
 from .vi.gaussian import (
     GaussianMixtureInputs,
     GaussianMixturePosterior,
@@ -81,6 +97,7 @@ def fit_variational(
     dataset: Dataset,
     model: (
         ModelConfig
+        | BetaRegMixtureSetting
         | GaussianMixtureSetting
         | LogNormalMixtureSetting
         | LogNormalRepMixtureSetting
@@ -91,6 +108,8 @@ def fit_variational(
 ) -> VariationalResult:
     """Dispatch to the available variational inference implementation."""
 
+    if isinstance(model, BetaRegMixtureSetting):
+        return fit_betareg_mixture_vb(dataset, model, fit)
     if isinstance(model, GaussianMixtureSetting):
         return fit_gaussian_mixture_vb(dataset, model, fit)
     if isinstance(model, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):

@@ -73,6 +73,35 @@ class GaussianMixtureSetting:
 
 
 @dataclass(frozen=True)
+class BetaRegMixtureSetting:
+    """Minimal Python version of the Rajan ``BetaReg`` GSM setting."""
+
+    model_name: str = "BetaReg"
+    data_file_name: str = "Rajan.csv"
+    feature_names: tuple[str, str] = ("Mean", "Disp")
+    link_types: tuple[str, str] = ("logit", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(5)),
+        tuple(range(5)),
+    )
+    covs_mix: tuple[int, ...] = tuple(range(5))
+    on_trial: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(1, 5)),
+        tuple(range(1, 5)),
+    )
+    on_trial_mix: tuple[int, ...] = tuple(range(1, 5))
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 2
+    prior_mean_feat: tuple[float, float] = (0.367, 2.2649)
+    prior_std_feat: tuple[float, float] = (0.1, 10.0)
+    prior_shrink: tuple[float | str, float | str] = ("unitinfo", "unitinfo")
+    prior_shrink_mix: float | str = 100.0
+    prior_inclusion: tuple[float, float] = (0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+
+
+@dataclass(frozen=True)
 class LogNormalMixtureSetting:
     """Minimal Python version of MATLAB's ``LogNorm`` GSM setting."""
 
@@ -197,6 +226,12 @@ def hetero_gaussian_setting(n_components: int = 2) -> GaussianMixtureSetting:
     """Return the default HeteroGauss setting with an adjustable component count."""
 
     return GaussianMixtureSetting(n_components=n_components)
+
+
+def rajan_betareg_mixture_setting(n_components: int = 2) -> BetaRegMixtureSetting:
+    """Return MATLAB ``Rajan`` BetaReg defaults with an adjustable component count."""
+
+    return BetaRegMixtureSetting(n_components=n_components)
 
 
 def lognormal_mixture_setting(n_components: int = 2) -> LogNormalMixtureSetting:

@@ -4,7 +4,7 @@ The Python module `gsm` implements the covariate-dependent smooth mixture models
 
 The package is intentionally small while the implementation is underway. The Python
 target is variational inference rather than Metropolis-Hastings with Newton
-updates in Villani, Li, et al's original publishsed papers.
+updates in Villani, Li, et al's original published papers.
 
 ## General Purpose
 
@@ -36,7 +36,8 @@ comparison.
 - JAX-compatible link and inverse-link functions.
 - Gaussian mixture kernel with identity-linked means, log-linked variances, and
   multinomial-logit gating.
-- Mean-field Gaussian variational posterior over Gaussian mixture coefficients.
+- Beta-regression mixture kernel for the Rajan debt-ratio example.
+- Mean-field Gaussian variational posterior over mixture coefficients.
 - Optional ARD shrinkage for non-constant covariates.
 - Posterior-sampled held-out ELPD/LPDS for chronological train/test evaluation.
 
@@ -64,6 +65,12 @@ Run the default S&P 500 Gaussian mixture fit:
 
 ```bash
 python scripts/run_gaussian_sp500.py --max-iter 50 --restarts 1
+```
+
+Run the Rajan beta-regression mixture fit:
+
+```bash
+python scripts/run_betareg_rajan.py --max-iter 50 --restarts 1
 ```
 
 Run chronological held-out ELPD with posterior predictive sampling:
@@ -101,14 +108,19 @@ gsm/
     engine.py               # shared optimizer and posterior sampling helpers
     gaussian.py             # Gaussian-mixture VB fitting
     lognormal.py            # LogNorm/LogNormRep VB fitting
+    betareg.py              # BetaReg VB fitting
     splitnormal.py          # split-normal VB fitting
     splitt.py               # split-t VB fitting
   models/
+    betareg.py              # beta-regression mixture log-density
     gaussian.py             # Gaussian mixture log-density and predictions
+    lognormal.py            # lognormal mixture log-density and predictions
     poisson.py              # early migration kernel
     negbin.py               # early migration kernel
 scripts/
+  BetaReg_config.py         # default Rajan beta-regression specification
   Gaussian_config.py        # default S&P 500 Gaussian mixture specification
+  run_betareg_rajan.py      # Rajan BetaReg command-line runner
   run_gaussian_sp500.py     # command-line runner
 tests/
   test_*.py                 # focused migration tests

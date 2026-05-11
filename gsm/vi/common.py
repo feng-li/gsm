@@ -91,3 +91,9 @@ def fit_design_standardization(
 def validate_positive_response(y: np.ndarray) -> None:
     if np.any(np.asarray(y).reshape(-1) <= 0.0):
         raise ValueError("LogNorm and LogNormRep require strictly positive responses")
+
+
+def validate_unit_interval_response(y: np.ndarray) -> None:
+    y = np.asarray(y).reshape(-1)
+    if np.any((y < 0.0) | (y > 1.0)):
+        raise ValueError("BetaReg requires responses between 0 and 1")
