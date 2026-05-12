@@ -37,6 +37,8 @@ comparison.
 - Gaussian mixture kernel with identity-linked means, log-linked variances, and
   multinomial-logit gating.
 - Beta-regression mixture kernel for the Rajan debt-ratio example.
+- Gamma/GammaRep mixture kernel with shared mean-variance or shape-scale
+  parameterization.
 - Mean-field Gaussian variational posterior over mixture coefficients.
 - Optional ARD shrinkage for non-constant covariates.
 - Posterior-sampled held-out ELPD/LPDS for chronological train/test evaluation.
@@ -106,6 +108,7 @@ gsm/
   vi/
     common.py               # shared VB result and preprocessing helpers
     engine.py               # shared optimizer and posterior sampling helpers
+    gamma.py                # Gamma/GammaRep VB fitting
     gaussian.py             # Gaussian-mixture VB fitting
     lognormal.py            # LogNorm/LogNormRep VB fitting
     betareg.py              # BetaReg VB fitting
@@ -113,6 +116,7 @@ gsm/
     splitt.py               # split-t VB fitting
   models/
     betareg.py              # beta-regression mixture log-density
+    gamma.py                # gamma mixture log-density and predictions
     gaussian.py             # Gaussian mixture log-density and predictions
     lognormal.py            # lognormal mixture log-density and predictions
     poisson.py              # early migration kernel

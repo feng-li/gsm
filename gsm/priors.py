@@ -45,6 +45,15 @@ class LogNormalMixtureCoefficientPriors:
 
 
 @dataclass(frozen=True)
+class GammaMixtureCoefficientPriors:
+    """Coefficient priors for mean/variance and shape/scale gamma mixtures."""
+
+    mean: GaussianCoefficientPrior
+    variance: GaussianCoefficientPrior
+    gating: GaussianCoefficientPrior | None
+
+
+@dataclass(frozen=True)
 class BetaRegMixtureCoefficientPriors:
     """Coefficient priors for beta-regression mixtures."""
 
@@ -236,6 +245,35 @@ def build_lognormal_mixture_priors(
         ),
         scale=build_gaussian_coefficient_prior(
             inputs.X_scale,
+            setting.prior_mean_feat[1],
+            setting.prior_std_feat[1],
+            setting.link_types[1],
+            setting.prior_shrink[1],
+        ),
+        gating=build_gating_prior(
+            inputs.Z,
+            setting.n_components,
+            setting.prior_shrink_mix,
+        ),
+    )
+
+
+def build_gamma_mixture_priors(
+    inputs: Any,
+    setting: Any,
+) -> GammaMixtureCoefficientPriors:
+    """Build all coefficient priors needed by gamma mixture VB fits."""
+
+    return GammaMixtureCoefficientPriors(
+        mean=build_gaussian_coefficient_prior(
+            inputs.X_mean,
+            setting.prior_mean_feat[0],
+            setting.prior_std_feat[0],
+            setting.link_types[0],
+            setting.prior_shrink[0],
+        ),
+        variance=build_gaussian_coefficient_prior(
+            inputs.X_variance,
             setting.prior_mean_feat[1],
             setting.prior_std_feat[1],
             setting.link_types[1],

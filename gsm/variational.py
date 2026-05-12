@@ -7,6 +7,8 @@ existing import path stable while the migration grows.
 from .config import (
     BetaRegMixtureSetting,
     FitConfig,
+    GammaMixtureSetting,
+    GammaRepMixtureSetting,
     GaussianMixtureSetting,
     LogNormalMixtureSetting,
     LogNormalRepMixtureSetting,
@@ -45,6 +47,21 @@ from .vi.gaussian import (
     sample_gaussian_mixture_posterior,
     tree_to_gaussian_params,
     tree_to_gaussian_posterior,
+)
+from .vi.gamma import (
+    GammaMixtureInputs,
+    GammaMixturePosterior,
+    GammaMixtureStandardization,
+    fit_gamma_mixture_standardization,
+    fit_gamma_mixture_vb,
+    gamma_mixture_elbo,
+    gamma_mixture_variational_elbo,
+    initialize_gamma_mixture_params,
+    initialize_gamma_mixture_variational_params,
+    prepare_gamma_mixture_inputs,
+    sample_gamma_mixture_posterior,
+    tree_to_gamma_params,
+    tree_to_gamma_posterior,
 )
 from .vi.lognormal import (
     LogNormalMixtureInputs,
@@ -98,6 +115,8 @@ def fit_variational(
     model: (
         ModelConfig
         | BetaRegMixtureSetting
+        | GammaMixtureSetting
+        | GammaRepMixtureSetting
         | GaussianMixtureSetting
         | LogNormalMixtureSetting
         | LogNormalRepMixtureSetting
@@ -110,6 +129,8 @@ def fit_variational(
 
     if isinstance(model, BetaRegMixtureSetting):
         return fit_betareg_mixture_vb(dataset, model, fit)
+    if isinstance(model, (GammaMixtureSetting, GammaRepMixtureSetting)):
+        return fit_gamma_mixture_vb(dataset, model, fit)
     if isinstance(model, GaussianMixtureSetting):
         return fit_gaussian_mixture_vb(dataset, model, fit)
     if isinstance(model, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):

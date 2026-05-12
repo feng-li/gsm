@@ -150,6 +150,54 @@ class LogNormalRepMixtureSetting:
 
 
 @dataclass(frozen=True)
+class GammaMixtureSetting:
+    """Minimal Python version of MATLAB's ``Gamma`` GSM setting."""
+
+    model_name: str = "Gamma"
+    data_file_name: str = "simpleUnivDens"
+    feature_names: tuple[str, str] = ("Mean", "Variance")
+    link_types: tuple[str, str] = ("log", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...]] = ((0,), (0,))
+    covs_mix: tuple[int, ...] = (0,)
+    on_trial: tuple[tuple[int, ...], tuple[int, ...]] = ((), ())
+    on_trial_mix: tuple[int, ...] = ()
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float, float] = (361.0, 176.377**2)
+    prior_std_feat: tuple[float, float] = (100.0, 100.0**2)
+    prior_shrink: tuple[float | str, float | str] = ("UnitInfo", "UnitInfo")
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float, float] = (0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+    parameterization: Literal["mean_variance", "shape_scale"] = "mean_variance"
+
+
+@dataclass(frozen=True)
+class GammaRepMixtureSetting:
+    """Response-equivalent Gamma setting using direct shape/scale features."""
+
+    model_name: str = "GammaRep"
+    data_file_name: str = "simpleUnivDens"
+    feature_names: tuple[str, str] = ("Shape", "Scale")
+    link_types: tuple[str, str] = ("log", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...]] = ((0,), (0,))
+    covs_mix: tuple[int, ...] = (0,)
+    on_trial: tuple[tuple[int, ...], tuple[int, ...]] = ((), ())
+    on_trial_mix: tuple[int, ...] = ()
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float, float] = (361.0**2 / 176.377**2, 176.377**2 / 361.0)
+    prior_std_feat: tuple[float, float] = (10.0, 100.0)
+    prior_shrink: tuple[float | str, float | str] = ("UnitInfo", "UnitInfo")
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float, float] = (0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+    parameterization: Literal["mean_variance", "shape_scale"] = "shape_scale"
+
+
+@dataclass(frozen=True)
 class SplitTMixtureSetting:
     """Minimal Python version of MATLAB's asymmetric Student-t GSM setting.
 
@@ -244,6 +292,18 @@ def lognormal_rep_mixture_setting(n_components: int = 2) -> LogNormalRepMixtureS
     """Return MATLAB ``LogNormRep`` defaults with an adjustable component count."""
 
     return LogNormalRepMixtureSetting(n_components=n_components)
+
+
+def gamma_mixture_setting(n_components: int = 2) -> GammaMixtureSetting:
+    """Return MATLAB ``Gamma`` defaults with an adjustable component count."""
+
+    return GammaMixtureSetting(n_components=n_components)
+
+
+def gamma_rep_mixture_setting(n_components: int = 2) -> GammaRepMixtureSetting:
+    """Return direct shape/scale GammaRep defaults with an adjustable component count."""
+
+    return GammaRepMixtureSetting(n_components=n_components)
 
 
 def sp500_gaussian_mixture_setting(n_components: int = 3) -> GaussianMixtureSetting:
