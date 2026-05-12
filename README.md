@@ -87,6 +87,15 @@ python scripts/run_gaussian_sp500.py \
   --predictive-samples 100
 ```
 
+Compare implemented continuous-response models:
+
+```bash
+python scripts/compare_continuous_models.py \
+  --groups returns positive rajan \
+  --max-iter 50 \
+  --restarts 1
+```
+
 Enable ARD shrinkage:
 
 ```bash
@@ -129,6 +138,7 @@ gsm/
 scripts/
   BetaReg_config.py         # default Rajan beta-regression specification
   Gaussian_config.py        # default S&P 500 Gaussian mixture specification
+  compare_continuous_models.py
   run_betareg_rajan.py      # Rajan BetaReg command-line runner
   run_gaussian_sp500.py     # command-line runner
 tests/

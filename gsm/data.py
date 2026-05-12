@@ -40,8 +40,8 @@ def load_mat_dataset(path: str | Path) -> Dataset:
     if missing:
         raise KeyError(f"missing required MATLAB variables: {sorted(missing)}")
 
-    y = np.asarray(raw["y"])
-    X = np.asarray(raw["X"])
+    y = np.asarray(raw["y"], dtype=float)
+    X = np.asarray(raw["X"], dtype=float)
     if y.ndim == 1:
         y = y[:, None]
     if X.ndim != 2:
