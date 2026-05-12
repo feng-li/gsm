@@ -37,6 +37,7 @@ comparison.
 - Gaussian mixture kernel with identity-linked means, log-linked variances, and
   multinomial-logit gating.
 - Beta-regression mixture kernel for the Rajan debt-ratio example.
+- Poisson and negative-binomial mixture kernels for count-response examples.
 - Gamma/GammaRep mixture kernel with shared mean-variance or shape-scale
   parameterization.
 - Symmetric Student-t mixture kernel with mean, degrees of freedom, and scale.
@@ -121,6 +122,8 @@ gsm/
     gamma.py                # Gamma/GammaRep VB fitting
     gaussian.py             # Gaussian-mixture VB fitting
     lognormal.py            # LogNorm/LogNormRep VB fitting
+    negbin.py               # negative-binomial VB fitting
+    poisson.py              # Poisson VB fitting
     betareg.py              # BetaReg VB fitting
     splitnormal.py          # split-normal VB fitting
     splitt.py               # split-t VB fitting
@@ -130,11 +133,11 @@ gsm/
     gamma.py                # gamma mixture log-density and predictions
     gaussian.py             # Gaussian mixture log-density and predictions
     lognormal.py            # lognormal mixture log-density and predictions
+    negbin.py               # negative-binomial mixture log-density and predictions
+    poisson.py              # Poisson mixture log-density and predictions
     splitnormal.py          # split-normal mixture log-density and predictions
     splitt.py               # split-t mixture log-density and predictions
     studentt.py             # symmetric Student-t mixture log-density and predictions
-    poisson.py              # early migration kernel
-    negbin.py               # early migration kernel
 scripts/
   BetaReg_config.py         # default Rajan beta-regression specification
   Gaussian_config.py        # default S&P 500 Gaussian mixture specification

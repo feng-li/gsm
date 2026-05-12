@@ -102,6 +102,58 @@ class BetaRegMixtureSetting:
 
 
 @dataclass(frozen=True)
+class PoissonMixtureSetting:
+    """Minimal Python version of the mdvisits ``Pois`` GSM setting."""
+
+    model_name: str = "Pois"
+    data_file_name: str = "mdvisitsReduced.mat"
+    feature_names: tuple[str] = ("Mean",)
+    link_types: tuple[str] = ("log",)
+    covs: tuple[tuple[int, ...]] = (tuple(range(8)),)
+    covs_mix: tuple[int, ...] = tuple(range(8))
+    on_trial: tuple[tuple[int, ...]] = (tuple(range(1, 8)),)
+    on_trial_mix: tuple[int, ...] = tuple(range(1, 8))
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float] = (2.5891,)
+    prior_std_feat: tuple[float] = (10.0,)
+    prior_shrink: tuple[float | str] = ("UnitInfo",)
+    prior_shrink_mix: float | str = 100.0
+    prior_inclusion: tuple[float] = (0.5,)
+    prior_inclusion_mix: float = 0.5
+
+
+@dataclass(frozen=True)
+class NegBinMixtureSetting:
+    """Minimal Python version of the mdvisits ``NegBin`` GSM setting."""
+
+    model_name: str = "NegBin"
+    data_file_name: str = "mdvisitsReduced.mat"
+    feature_names: tuple[str, str] = ("Mean", "Disp")
+    link_types: tuple[str, str] = ("log", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(8)),
+        tuple(range(8)),
+    )
+    covs_mix: tuple[int, ...] = tuple(range(8))
+    on_trial: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(1, 8)),
+        tuple(range(1, 8)),
+    )
+    on_trial_mix: tuple[int, ...] = tuple(range(1, 8))
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float, float] = (2.5891, 0.4951)
+    prior_std_feat: tuple[float, float] = (10.0, 10.0)
+    prior_shrink: tuple[float | str, float | str] = ("unitinfo", "unitinfo")
+    prior_shrink_mix: float | str = 100.0
+    prior_inclusion: tuple[float, float] = (0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+
+
+@dataclass(frozen=True)
 class LogNormalMixtureSetting:
     """Minimal Python version of MATLAB's ``LogNorm`` GSM setting."""
 
@@ -311,6 +363,18 @@ def rajan_betareg_mixture_setting(n_components: int = 2) -> BetaRegMixtureSettin
     """Return MATLAB ``Rajan`` BetaReg defaults with an adjustable component count."""
 
     return BetaRegMixtureSetting(n_components=n_components)
+
+
+def mdvisits_poisson_mixture_setting(n_components: int = 2) -> PoissonMixtureSetting:
+    """Return MATLAB ``mdvisitsPois`` defaults with an adjustable component count."""
+
+    return PoissonMixtureSetting(n_components=n_components)
+
+
+def mdvisits_negbin_mixture_setting(n_components: int = 2) -> NegBinMixtureSetting:
+    """Return MATLAB ``mdvisitsNegBin`` defaults with an adjustable component count."""
+
+    return NegBinMixtureSetting(n_components=n_components)
 
 
 def lognormal_mixture_setting(n_components: int = 2) -> LogNormalMixtureSetting:

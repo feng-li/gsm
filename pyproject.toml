@@ -1,7 +1,7 @@
 [project]
-name = "gsm-python"
+name = "gsm"
 version = "0.1.0"
-description = "Python migration skeleton for GSMMatlab"
+description = "Python module for covariate-dependent smooth mixture models"
 requires-python = ">=3.11"
 dependencies = [
     "jax",

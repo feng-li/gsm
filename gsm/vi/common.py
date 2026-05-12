@@ -97,3 +97,13 @@ def validate_unit_interval_response(y: np.ndarray) -> None:
     y = np.asarray(y).reshape(-1)
     if np.any((y < 0.0) | (y > 1.0)):
         raise ValueError("BetaReg requires responses between 0 and 1")
+
+
+def validate_count_response(y: np.ndarray) -> None:
+    y = np.asarray(y).reshape(-1)
+    if not np.all(np.isfinite(y)):
+        raise ValueError("count models require finite responses")
+    if np.any(y < 0.0):
+        raise ValueError("count models require non-negative responses")
+    if not np.allclose(y, np.round(y)):
+        raise ValueError("count models require integer-valued responses")

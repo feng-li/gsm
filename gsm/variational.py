@@ -13,6 +13,8 @@ from .config import (
     LogNormalMixtureSetting,
     LogNormalRepMixtureSetting,
     ModelConfig,
+    NegBinMixtureSetting,
+    PoissonMixtureSetting,
     SplitNormalMixtureSetting,
     SplitTMixtureSetting,
     StudentTMixtureSetting,
@@ -79,6 +81,36 @@ from .vi.lognormal import (
     tree_to_lognormal_params,
     tree_to_lognormal_posterior,
 )
+from .vi.negbin import (
+    NegBinMixtureInputs,
+    NegBinMixturePosterior,
+    NegBinMixtureStandardization,
+    fit_negbin_mixture_standardization,
+    fit_negbin_mixture_vb,
+    initialize_negbin_mixture_params,
+    initialize_negbin_mixture_variational_params,
+    negbin_mixture_elbo,
+    negbin_mixture_variational_elbo,
+    prepare_negbin_mixture_inputs,
+    sample_negbin_mixture_posterior,
+    tree_to_negbin_params,
+    tree_to_negbin_posterior,
+)
+from .vi.poisson import (
+    PoissonMixtureInputs,
+    PoissonMixturePosterior,
+    PoissonMixtureStandardization,
+    fit_poisson_mixture_standardization,
+    fit_poisson_mixture_vb,
+    initialize_poisson_mixture_params,
+    initialize_poisson_mixture_variational_params,
+    poisson_mixture_elbo,
+    poisson_mixture_variational_elbo,
+    prepare_poisson_mixture_inputs,
+    sample_poisson_mixture_posterior,
+    tree_to_poisson_params,
+    tree_to_poisson_posterior,
+)
 from .vi.splitnormal import (
     SplitNormalMixtureInputs,
     SplitNormalMixturePosterior,
@@ -136,6 +168,8 @@ def fit_variational(
         | GaussianMixtureSetting
         | LogNormalMixtureSetting
         | LogNormalRepMixtureSetting
+        | NegBinMixtureSetting
+        | PoissonMixtureSetting
         | SplitNormalMixtureSetting
         | SplitTMixtureSetting
         | StudentTMixtureSetting
@@ -152,6 +186,10 @@ def fit_variational(
         return fit_gaussian_mixture_vb(dataset, model, fit)
     if isinstance(model, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
         return fit_lognormal_mixture_vb(dataset, model, fit)
+    if isinstance(model, NegBinMixtureSetting):
+        return fit_negbin_mixture_vb(dataset, model, fit)
+    if isinstance(model, PoissonMixtureSetting):
+        return fit_poisson_mixture_vb(dataset, model, fit)
     if isinstance(model, SplitNormalMixtureSetting):
         return fit_splitnormal_mixture_vb(dataset, model, fit)
     if isinstance(model, SplitTMixtureSetting):

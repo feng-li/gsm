@@ -63,6 +63,23 @@ class BetaRegMixtureCoefficientPriors:
 
 
 @dataclass(frozen=True)
+class PoissonMixtureCoefficientPriors:
+    """Coefficient priors for Poisson mixtures."""
+
+    mean: GaussianCoefficientPrior
+    gating: GaussianCoefficientPrior | None
+
+
+@dataclass(frozen=True)
+class NegBinMixtureCoefficientPriors:
+    """Coefficient priors for negative-binomial mixtures."""
+
+    mean: GaussianCoefficientPrior
+    dispersion: GaussianCoefficientPrior
+    gating: GaussianCoefficientPrior | None
+
+
+@dataclass(frozen=True)
 class SplitTMixtureCoefficientPriors:
     """Coefficient priors for the split-t mixture scaffold."""
 
@@ -304,6 +321,57 @@ def build_betareg_mixture_priors(
     """Build all coefficient priors needed by beta-regression mixture VB fits."""
 
     return BetaRegMixtureCoefficientPriors(
+        mean=build_gaussian_coefficient_prior(
+            inputs.X_mean,
+            setting.prior_mean_feat[0],
+            setting.prior_std_feat[0],
+            setting.link_types[0],
+            setting.prior_shrink[0],
+        ),
+        dispersion=build_gaussian_coefficient_prior(
+            inputs.X_dispersion,
+            setting.prior_mean_feat[1],
+            setting.prior_std_feat[1],
+            setting.link_types[1],
+            setting.prior_shrink[1],
+        ),
+        gating=build_gating_prior(
+            inputs.Z,
+            setting.n_components,
+            setting.prior_shrink_mix,
+        ),
+    )
+
+
+def build_poisson_mixture_priors(
+    inputs: Any,
+    setting: Any,
+) -> PoissonMixtureCoefficientPriors:
+    """Build all coefficient priors needed by Poisson mixture VB fits."""
+
+    return PoissonMixtureCoefficientPriors(
+        mean=build_gaussian_coefficient_prior(
+            inputs.X_mean,
+            setting.prior_mean_feat[0],
+            setting.prior_std_feat[0],
+            setting.link_types[0],
+            setting.prior_shrink[0],
+        ),
+        gating=build_gating_prior(
+            inputs.Z,
+            setting.n_components,
+            setting.prior_shrink_mix,
+        ),
+    )
+
+
+def build_negbin_mixture_priors(
+    inputs: Any,
+    setting: Any,
+) -> NegBinMixtureCoefficientPriors:
+    """Build all coefficient priors needed by negative-binomial mixture VB fits."""
+
+    return NegBinMixtureCoefficientPriors(
         mean=build_gaussian_coefficient_prior(
             inputs.X_mean,
             setting.prior_mean_feat[0],

@@ -16,6 +16,8 @@ from .config import (
     GaussianMixtureSetting,
     LogNormalMixtureSetting,
     LogNormalRepMixtureSetting,
+    NegBinMixtureSetting,
+    PoissonMixtureSetting,
     SplitNormalMixtureSetting,
     SplitTMixtureSetting,
     StudentTMixtureSetting,
@@ -25,6 +27,8 @@ from .models.betareg import log_prob_observations as betareg_log_prob_observatio
 from .models.gamma import log_prob_observations as gamma_log_prob_observations
 from .models.gaussian import log_prob_observations as gaussian_log_prob_observations
 from .models.lognormal import log_prob_observations as lognormal_log_prob_observations
+from .models.negbin import log_prob_observations as negbin_log_prob_observations
+from .models.poisson import log_prob_observations as poisson_log_prob_observations
 from .models.splitnormal import log_prob_observations as splitnormal_log_prob_observations
 from .models.splitt import log_prob_observations as splitt_log_prob_observations
 from .models.studentt import log_prob_observations as studentt_log_prob_observations
@@ -33,6 +37,8 @@ from .variational import (
     GammaMixtureStandardization,
     GaussianMixtureStandardization,
     LogNormalMixtureStandardization,
+    NegBinMixtureStandardization,
+    PoissonMixtureStandardization,
     SplitNormalMixtureStandardization,
     SplitTMixtureStandardization,
     StudentTMixtureStandardization,
@@ -41,6 +47,8 @@ from .variational import (
     fit_gamma_mixture_standardization,
     fit_gaussian_mixture_standardization,
     fit_lognormal_mixture_standardization,
+    fit_negbin_mixture_standardization,
+    fit_poisson_mixture_standardization,
     fit_splitnormal_mixture_standardization,
     fit_splitt_mixture_standardization,
     fit_studentt_mixture_standardization,
@@ -49,6 +57,8 @@ from .variational import (
     prepare_gamma_mixture_inputs,
     prepare_gaussian_mixture_inputs,
     prepare_lognormal_mixture_inputs,
+    prepare_negbin_mixture_inputs,
+    prepare_poisson_mixture_inputs,
     prepare_splitnormal_mixture_inputs,
     prepare_splitt_mixture_inputs,
     prepare_studentt_mixture_inputs,
@@ -56,6 +66,8 @@ from .variational import (
     sample_gamma_mixture_posterior,
     sample_gaussian_mixture_posterior,
     sample_lognormal_mixture_posterior,
+    sample_negbin_mixture_posterior,
+    sample_poisson_mixture_posterior,
     sample_splitnormal_mixture_posterior,
     sample_splitt_mixture_posterior,
     sample_studentt_mixture_posterior,
@@ -63,6 +75,8 @@ from .variational import (
     tree_to_gamma_params,
     tree_to_gaussian_params,
     tree_to_lognormal_params,
+    tree_to_negbin_params,
+    tree_to_poisson_params,
     tree_to_splitnormal_params,
     tree_to_splitt_params,
     tree_to_studentt_params,
@@ -76,6 +90,8 @@ ModelSetting = (
     | GaussianMixtureSetting
     | LogNormalMixtureSetting
     | LogNormalRepMixtureSetting
+    | NegBinMixtureSetting
+    | PoissonMixtureSetting
     | SplitNormalMixtureSetting
     | SplitTMixtureSetting
     | StudentTMixtureSetting
@@ -85,6 +101,8 @@ ModelStandardization = (
     | GammaMixtureStandardization
     | GaussianMixtureStandardization
     | LogNormalMixtureStandardization
+    | NegBinMixtureStandardization
+    | PoissonMixtureStandardization
     | SplitNormalMixtureStandardization
     | SplitTMixtureStandardization
     | StudentTMixtureStandardization
@@ -230,6 +248,10 @@ def _fit_model_standardization(
         return fit_gaussian_mixture_standardization(dataset, setting)
     if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
         return fit_lognormal_mixture_standardization(dataset, setting)
+    if isinstance(setting, NegBinMixtureSetting):
+        return fit_negbin_mixture_standardization(dataset, setting)
+    if isinstance(setting, PoissonMixtureSetting):
+        return fit_poisson_mixture_standardization(dataset, setting)
     if isinstance(setting, SplitNormalMixtureSetting):
         return fit_splitnormal_mixture_standardization(dataset, setting)
     if isinstance(setting, SplitTMixtureSetting):
@@ -252,6 +274,10 @@ def _prepare_model_inputs(
         return prepare_gaussian_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
         return prepare_lognormal_mixture_inputs(dataset, setting, standardization)
+    if isinstance(setting, NegBinMixtureSetting):
+        return prepare_negbin_mixture_inputs(dataset, setting, standardization)
+    if isinstance(setting, PoissonMixtureSetting):
+        return prepare_poisson_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, SplitNormalMixtureSetting):
         return prepare_splitnormal_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, SplitTMixtureSetting):
@@ -270,6 +296,10 @@ def _sample_model_posterior(posterior, setting: ModelSetting, seed: int, n_sampl
         return sample_gaussian_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
         return sample_lognormal_mixture_posterior(posterior, seed, n_samples)
+    if isinstance(setting, NegBinMixtureSetting):
+        return sample_negbin_mixture_posterior(posterior, seed, n_samples)
+    if isinstance(setting, PoissonMixtureSetting):
+        return sample_poisson_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, SplitNormalMixtureSetting):
         return sample_splitnormal_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, SplitTMixtureSetting):
@@ -288,6 +318,10 @@ def _tree_to_model_params(sample_tree, setting: ModelSetting):
         return tree_to_gaussian_params(sample_tree)
     if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
         return tree_to_lognormal_params(sample_tree)
+    if isinstance(setting, NegBinMixtureSetting):
+        return tree_to_negbin_params(sample_tree)
+    if isinstance(setting, PoissonMixtureSetting):
+        return tree_to_poisson_params(sample_tree)
     if isinstance(setting, SplitNormalMixtureSetting):
         return tree_to_splitnormal_params(sample_tree)
     if isinstance(setting, SplitTMixtureSetting):
@@ -331,6 +365,21 @@ def _pointwise_log_prob(params, inputs, setting: ModelSetting):
             jnp.asarray(inputs.X_scale),
             jnp.asarray(inputs.Z),
             parameterization=setting.parameterization,
+        )
+    if isinstance(setting, NegBinMixtureSetting):
+        return negbin_log_prob_observations(
+            params,
+            jnp.asarray(inputs.y),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_dispersion),
+            jnp.asarray(inputs.Z),
+        )
+    if isinstance(setting, PoissonMixtureSetting):
+        return poisson_log_prob_observations(
+            params,
+            jnp.asarray(inputs.y),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.Z),
         )
     if isinstance(setting, SplitNormalMixtureSetting):
         return splitnormal_log_prob_observations(
