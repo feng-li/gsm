@@ -24,6 +24,8 @@ def link(value, link_type: str | float):
         return jnp.log(-jnp.log1p(-value))
     if name == "reciprocal":
         return 1.0 / value
+    if name == "log1":
+        return jnp.log(value - 1.0)
     raise ValueError(f"unknown link type: {link_type}")
 
 
@@ -46,5 +48,6 @@ def inverse_link(eta, link_type: str | float):
         return -jnp.expm1(-jnp.exp(eta))
     if name == "reciprocal":
         return 1.0 / eta
+    if name == "log1":
+        return 1.0 + jnp.exp(eta)
     raise ValueError(f"unknown link type: {link_type}")
-

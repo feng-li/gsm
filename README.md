@@ -40,6 +40,7 @@ comparison.
 - Poisson and negative-binomial mixture kernels for count-response examples.
 - Binomial and beta-binomial mixture kernels with two-column responses:
   `successes, trials`.
+- Generalized Poisson mixture kernels for `GenPois` and `GenPoisAlt`.
 - Gamma/GammaRep mixture kernel with shared mean-variance or shape-scale
   parameterization.
 - Symmetric Student-t mixture kernel with mean, degrees of freedom, and scale.
@@ -132,6 +133,7 @@ gsm/
     betabinomial.py         # BetaBin VB fitting
     binomial.py             # Bin VB fitting
     gamma.py                # Gamma/GammaRep VB fitting
+    genpoisson.py           # GenPois/GenPoisAlt VB fitting
     gaussian.py             # Gaussian-mixture VB fitting
     lognormal.py            # LogNorm/LogNormRep VB fitting
     negbin.py               # negative-binomial VB fitting
@@ -145,6 +147,7 @@ gsm/
     betareg.py              # beta-regression mixture log-density
     binomial.py             # binomial mixture log-density and predictions
     gamma.py                # gamma mixture log-density and predictions
+    genpoisson.py           # generalized Poisson mixture log-density and predictions
     gaussian.py             # Gaussian mixture log-density and predictions
     lognormal.py            # lognormal mixture log-density and predictions
     negbin.py               # negative-binomial mixture log-density and predictions

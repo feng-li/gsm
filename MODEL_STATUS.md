@@ -18,8 +18,8 @@ This table tracks migration status for model kernels found in
 | `negBin` | `NegBinMixtureSetting` | Yes | Yes | Yes | Partial | mdvisits setting available; mean/dispersion parameterization matched. |
 | `Bin` | `BinomialMixtureSetting` | Yes | Yes | Yes | Yes | Two-column response `[successes, trials]`. |
 | `BetaBin` | `BetaBinMixtureSetting` | Yes | Yes | Yes | Yes | Two-column response `[successes, trials]`; MATLAB phi precision parameterization. |
-| `GenPois` | Not implemented | No | No | No | No | Needs count-mixture design. |
-| `GenPoisAlt` | Not implemented | No | No | No | No | Needs `log1` link and count-mixture design. |
+| `GenPois` | `GenPoissonMixtureSetting` | Yes | Yes | Yes | Yes | mdvisits setting available; MATLAB mean/dispersion parameterization. |
+| `GenPoisAlt` | `GenPoissonAltMixtureSetting` | Yes | Yes | Yes | Yes | Czado-style parameterization with `log1` dispersion link. |
 
 ## Next Validation Work
 
@@ -28,5 +28,6 @@ This table tracks migration status for model kernels found in
 - Add real-data comparison reports for continuous models using
   `scripts/compare_continuous_models.py`.
 - Add real-data mdvisits comparison reports for Poisson and NegBin.
+- Extend the mdvisits count comparison to include GenPois.
 - Add a real binomial-trials example before extending Bin/BetaBin comparison
   scripts.

@@ -11,6 +11,8 @@ from .config import (
     FitConfig,
     GammaMixtureSetting,
     GammaRepMixtureSetting,
+    GenPoissonAltMixtureSetting,
+    GenPoissonMixtureSetting,
     GaussianMixtureSetting,
     LogNormalMixtureSetting,
     LogNormalRepMixtureSetting,
@@ -97,6 +99,21 @@ from .vi.gamma import (
     sample_gamma_mixture_posterior,
     tree_to_gamma_params,
     tree_to_gamma_posterior,
+)
+from .vi.genpoisson import (
+    GenPoissonMixtureInputs,
+    GenPoissonMixturePosterior,
+    GenPoissonMixtureStandardization,
+    fit_genpoisson_mixture_standardization,
+    fit_genpoisson_mixture_vb,
+    genpoisson_mixture_elbo,
+    genpoisson_mixture_variational_elbo,
+    initialize_genpoisson_mixture_params,
+    initialize_genpoisson_mixture_variational_params,
+    prepare_genpoisson_mixture_inputs,
+    sample_genpoisson_mixture_posterior,
+    tree_to_genpoisson_params,
+    tree_to_genpoisson_posterior,
 )
 from .vi.lognormal import (
     LogNormalMixtureInputs,
@@ -199,6 +216,8 @@ def fit_variational(
         | BinomialMixtureSetting
         | GammaMixtureSetting
         | GammaRepMixtureSetting
+        | GenPoissonAltMixtureSetting
+        | GenPoissonMixtureSetting
         | GaussianMixtureSetting
         | LogNormalMixtureSetting
         | LogNormalRepMixtureSetting
@@ -220,6 +239,8 @@ def fit_variational(
         return fit_binomial_mixture_vb(dataset, model, fit)
     if isinstance(model, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return fit_gamma_mixture_vb(dataset, model, fit)
+    if isinstance(model, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
+        return fit_genpoisson_mixture_vb(dataset, model, fit)
     if isinstance(model, GaussianMixtureSetting):
         return fit_gaussian_mixture_vb(dataset, model, fit)
     if isinstance(model, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):

@@ -212,6 +212,66 @@ class NegBinMixtureSetting:
 
 
 @dataclass(frozen=True)
+class GenPoissonMixtureSetting:
+    """Minimal Python version of the mdvisits ``GenPois`` GSM setting."""
+
+    model_name: str = "GenPois"
+    data_file_name: str = "mdvisitsReduced.mat"
+    feature_names: tuple[str, str] = ("Mean", "Disp")
+    link_types: tuple[str, str] = ("log", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(8)),
+        tuple(range(8)),
+    )
+    covs_mix: tuple[int, ...] = tuple(range(8))
+    on_trial: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(1, 8)),
+        tuple(range(1, 8)),
+    )
+    on_trial_mix: tuple[int, ...] = tuple(range(1, 8))
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float, float] = (2.5891, 0.5778)
+    prior_std_feat: tuple[float, float] = (10.0, 1.0)
+    prior_shrink: tuple[float | str, float | str] = ("unitinfo", "unitinfo")
+    prior_shrink_mix: float | str = 100.0
+    prior_inclusion: tuple[float, float] = (0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+    parameterization: Literal["standard", "alternative"] = "standard"
+
+
+@dataclass(frozen=True)
+class GenPoissonAltMixtureSetting:
+    """Minimal Python version of MATLAB's ``GenPoisAlt`` GSM setting."""
+
+    model_name: str = "GenPoisAlt"
+    data_file_name: str = "nBideBayNew.dat"
+    feature_names: tuple[str, str] = ("Mean", "Disp")
+    link_types: tuple[str, str] = ("log", "log1")
+    covs: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(7)),
+        tuple(range(7)),
+    )
+    covs_mix: tuple[int, ...] = tuple(range(7))
+    on_trial: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(1, 7)),
+        tuple(range(1, 7)),
+    )
+    on_trial_mix: tuple[int, ...] = tuple(range(1, 7))
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float, float] = (5.0, 1.0)
+    prior_std_feat: tuple[float, float] = (10.0, 1.0)
+    prior_shrink: tuple[float | str, float | str] = (10.0, 10.0)
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float, float] = (0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+    parameterization: Literal["standard", "alternative"] = "alternative"
+
+
+@dataclass(frozen=True)
 class LogNormalMixtureSetting:
     """Minimal Python version of MATLAB's ``LogNorm`` GSM setting."""
 
@@ -445,6 +505,20 @@ def mdvisits_negbin_mixture_setting(n_components: int = 2) -> NegBinMixtureSetti
     """Return MATLAB ``mdvisitsNegBin`` defaults with an adjustable component count."""
 
     return NegBinMixtureSetting(n_components=n_components)
+
+
+def mdvisits_genpoisson_mixture_setting(n_components: int = 2) -> GenPoissonMixtureSetting:
+    """Return MATLAB ``mdvisitsGenPois`` defaults with an adjustable component count."""
+
+    return GenPoissonMixtureSetting(n_components=n_components)
+
+
+def genpoisson_alt_mixture_setting(
+    n_components: int = 2,
+) -> GenPoissonAltMixtureSetting:
+    """Return MATLAB ``GenPoisAlt`` defaults with an adjustable component count."""
+
+    return GenPoissonAltMixtureSetting(n_components=n_components)
 
 
 def lognormal_mixture_setting(n_components: int = 2) -> LogNormalMixtureSetting:

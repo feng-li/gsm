@@ -15,6 +15,8 @@ from .config import (
     FitConfig,
     GammaMixtureSetting,
     GammaRepMixtureSetting,
+    GenPoissonAltMixtureSetting,
+    GenPoissonMixtureSetting,
     GaussianMixtureSetting,
     LogNormalMixtureSetting,
     LogNormalRepMixtureSetting,
@@ -29,6 +31,7 @@ from .models.betabinomial import log_prob_observations as betabin_log_prob_obser
 from .models.betareg import log_prob_observations as betareg_log_prob_observations
 from .models.binomial import log_prob_observations as binomial_log_prob_observations
 from .models.gamma import log_prob_observations as gamma_log_prob_observations
+from .models.genpoisson import log_prob_observations as genpoisson_log_prob_observations
 from .models.gaussian import log_prob_observations as gaussian_log_prob_observations
 from .models.lognormal import log_prob_observations as lognormal_log_prob_observations
 from .models.negbin import log_prob_observations as negbin_log_prob_observations
@@ -41,6 +44,7 @@ from .variational import (
     BetaRegMixtureStandardization,
     BinomialMixtureStandardization,
     GammaMixtureStandardization,
+    GenPoissonMixtureStandardization,
     GaussianMixtureStandardization,
     LogNormalMixtureStandardization,
     NegBinMixtureStandardization,
@@ -53,6 +57,7 @@ from .variational import (
     fit_betareg_mixture_standardization,
     fit_binomial_mixture_standardization,
     fit_gamma_mixture_standardization,
+    fit_genpoisson_mixture_standardization,
     fit_gaussian_mixture_standardization,
     fit_lognormal_mixture_standardization,
     fit_negbin_mixture_standardization,
@@ -65,6 +70,7 @@ from .variational import (
     prepare_betareg_mixture_inputs,
     prepare_binomial_mixture_inputs,
     prepare_gamma_mixture_inputs,
+    prepare_genpoisson_mixture_inputs,
     prepare_gaussian_mixture_inputs,
     prepare_lognormal_mixture_inputs,
     prepare_negbin_mixture_inputs,
@@ -76,6 +82,7 @@ from .variational import (
     sample_betareg_mixture_posterior,
     sample_binomial_mixture_posterior,
     sample_gamma_mixture_posterior,
+    sample_genpoisson_mixture_posterior,
     sample_gaussian_mixture_posterior,
     sample_lognormal_mixture_posterior,
     sample_negbin_mixture_posterior,
@@ -87,6 +94,7 @@ from .variational import (
     tree_to_betareg_params,
     tree_to_binomial_params,
     tree_to_gamma_params,
+    tree_to_genpoisson_params,
     tree_to_gaussian_params,
     tree_to_lognormal_params,
     tree_to_negbin_params,
@@ -103,6 +111,8 @@ ModelSetting = (
     | BinomialMixtureSetting
     | GammaMixtureSetting
     | GammaRepMixtureSetting
+    | GenPoissonAltMixtureSetting
+    | GenPoissonMixtureSetting
     | GaussianMixtureSetting
     | LogNormalMixtureSetting
     | LogNormalRepMixtureSetting
@@ -117,6 +127,7 @@ ModelStandardization = (
     | BetaRegMixtureStandardization
     | BinomialMixtureStandardization
     | GammaMixtureStandardization
+    | GenPoissonMixtureStandardization
     | GaussianMixtureStandardization
     | LogNormalMixtureStandardization
     | NegBinMixtureStandardization
@@ -266,6 +277,8 @@ def _fit_model_standardization(
         return fit_binomial_mixture_standardization(dataset, setting)
     if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return fit_gamma_mixture_standardization(dataset, setting)
+    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
+        return fit_genpoisson_mixture_standardization(dataset, setting)
     if isinstance(setting, GaussianMixtureSetting):
         return fit_gaussian_mixture_standardization(dataset, setting)
     if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
@@ -296,6 +309,8 @@ def _prepare_model_inputs(
         return prepare_binomial_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return prepare_gamma_mixture_inputs(dataset, setting, standardization)
+    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
+        return prepare_genpoisson_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, GaussianMixtureSetting):
         return prepare_gaussian_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
@@ -322,6 +337,8 @@ def _sample_model_posterior(posterior, setting: ModelSetting, seed: int, n_sampl
         return sample_binomial_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return sample_gamma_mixture_posterior(posterior, seed, n_samples)
+    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
+        return sample_genpoisson_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, GaussianMixtureSetting):
         return sample_gaussian_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
@@ -348,6 +365,8 @@ def _tree_to_model_params(sample_tree, setting: ModelSetting):
         return tree_to_binomial_params(sample_tree)
     if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return tree_to_gamma_params(sample_tree)
+    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
+        return tree_to_genpoisson_params(sample_tree)
     if isinstance(setting, GaussianMixtureSetting):
         return tree_to_gaussian_params(sample_tree)
     if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
@@ -395,6 +414,15 @@ def _pointwise_log_prob(params, inputs, setting: ModelSetting):
             jnp.asarray(inputs.y),
             jnp.asarray(inputs.X_mean),
             jnp.asarray(inputs.X_variance),
+            jnp.asarray(inputs.Z),
+            parameterization=setting.parameterization,
+        )
+    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
+        return genpoisson_log_prob_observations(
+            params,
+            jnp.asarray(inputs.y),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_dispersion),
             jnp.asarray(inputs.Z),
             parameterization=setting.parameterization,
         )

@@ -97,6 +97,15 @@ class NegBinMixtureCoefficientPriors:
 
 
 @dataclass(frozen=True)
+class GenPoissonMixtureCoefficientPriors:
+    """Coefficient priors for generalized Poisson mixtures."""
+
+    mean: GaussianCoefficientPrior
+    dispersion: GaussianCoefficientPrior
+    gating: GaussianCoefficientPrior | None
+
+
+@dataclass(frozen=True)
 class SplitTMixtureCoefficientPriors:
     """Coefficient priors for the split-t mixture scaffold."""
 
@@ -166,6 +175,9 @@ def convert_prior_to_link_scale(
             if not 0.0 < mean < 1.0:
                 raise
             return math.log(mean / (1.0 - mean)), std
+    if name == "log1":
+        offset = max(mean - 1.0, 1e-6)
+        return math.log(offset), std / offset
 
     link_mean = _link_eval_scalar(mean, link_type)
     deriv = _link_derivative_scalar(mean, link_type)
@@ -445,6 +457,35 @@ def build_negbin_mixture_priors(
     """Build all coefficient priors needed by negative-binomial mixture VB fits."""
 
     return NegBinMixtureCoefficientPriors(
+        mean=build_gaussian_coefficient_prior(
+            inputs.X_mean,
+            setting.prior_mean_feat[0],
+            setting.prior_std_feat[0],
+            setting.link_types[0],
+            setting.prior_shrink[0],
+        ),
+        dispersion=build_gaussian_coefficient_prior(
+            inputs.X_dispersion,
+            setting.prior_mean_feat[1],
+            setting.prior_std_feat[1],
+            setting.link_types[1],
+            setting.prior_shrink[1],
+        ),
+        gating=build_gating_prior(
+            inputs.Z,
+            setting.n_components,
+            setting.prior_shrink_mix,
+        ),
+    )
+
+
+def build_genpoisson_mixture_priors(
+    inputs: Any,
+    setting: Any,
+) -> GenPoissonMixtureCoefficientPriors:
+    """Build all coefficient priors needed by generalized Poisson VB fits."""
+
+    return GenPoissonMixtureCoefficientPriors(
         mean=build_gaussian_coefficient_prior(
             inputs.X_mean,
             setting.prior_mean_feat[0],
