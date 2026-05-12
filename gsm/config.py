@@ -270,6 +270,37 @@ class SplitNormalMixtureSetting:
     prior_inclusion_mix: float = 0.5
 
 
+@dataclass(frozen=True)
+class StudentTMixtureSetting:
+    """Minimal Python version of MATLAB's symmetric ``studT`` model."""
+
+    model_name: str = "StudT"
+    data_file_name: str = "simpleUnivDens"
+    feature_names: tuple[str, str, str] = ("Mean", "DF", "Scale")
+    link_types: tuple[str, str, str] = ("identity", "log", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]] = (
+        (0,),
+        (0,),
+        (0,),
+    )
+    covs_mix: tuple[int, ...] = (0,)
+    on_trial: tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]] = ((), (), ())
+    on_trial_mix: tuple[int, ...] = ()
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float, float, float] = (0.0, 10.0, 1.0)
+    prior_std_feat: tuple[float, float, float] = (10.0, 7.0, 1.0)
+    prior_shrink: tuple[float | str, float | str, float | str] = (
+        100.0,
+        100.0,
+        100.0,
+    )
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float, float, float] = (0.5, 0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+
+
 def hetero_gaussian_setting(n_components: int = 2) -> GaussianMixtureSetting:
     """Return the default HeteroGauss setting with an adjustable component count."""
 
@@ -304,6 +335,12 @@ def gamma_rep_mixture_setting(n_components: int = 2) -> GammaRepMixtureSetting:
     """Return direct shape/scale GammaRep defaults with an adjustable component count."""
 
     return GammaRepMixtureSetting(n_components=n_components)
+
+
+def studentt_mixture_setting(n_components: int = 2) -> StudentTMixtureSetting:
+    """Return MATLAB ``studT`` defaults with an adjustable component count."""
+
+    return StudentTMixtureSetting(n_components=n_components)
 
 
 def sp500_gaussian_mixture_setting(n_components: int = 3) -> GaussianMixtureSetting:

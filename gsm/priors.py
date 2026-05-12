@@ -74,6 +74,16 @@ class SplitTMixtureCoefficientPriors:
 
 
 @dataclass(frozen=True)
+class StudentTMixtureCoefficientPriors:
+    """Coefficient priors for the symmetric Student-t mixture scaffold."""
+
+    mean: GaussianCoefficientPrior
+    df: GaussianCoefficientPrior
+    scale: GaussianCoefficientPrior
+    gating: GaussianCoefficientPrior | None
+
+
+@dataclass(frozen=True)
 class SplitNormalMixtureCoefficientPriors:
     """Coefficient priors for the split-normal mixture scaffold."""
 
@@ -350,6 +360,42 @@ def build_splitt_mixture_priors(
             setting.prior_std_feat[3],
             setting.link_types[3],
             setting.prior_shrink[3],
+        ),
+        gating=build_gating_prior(
+            inputs.Z,
+            setting.n_components,
+            setting.prior_shrink_mix,
+        ),
+    )
+
+
+def build_studentt_mixture_priors(
+    inputs: Any,
+    setting: Any,
+) -> StudentTMixtureCoefficientPriors:
+    """Build all coefficient priors needed by ``fit_studentt_mixture_vb``."""
+
+    return StudentTMixtureCoefficientPriors(
+        mean=build_gaussian_coefficient_prior(
+            inputs.X_mean,
+            setting.prior_mean_feat[0],
+            setting.prior_std_feat[0],
+            setting.link_types[0],
+            setting.prior_shrink[0],
+        ),
+        df=build_gaussian_coefficient_prior(
+            inputs.X_df,
+            setting.prior_mean_feat[1],
+            setting.prior_std_feat[1],
+            setting.link_types[1],
+            setting.prior_shrink[1],
+        ),
+        scale=build_gaussian_coefficient_prior(
+            inputs.X_scale,
+            setting.prior_mean_feat[2],
+            setting.prior_std_feat[2],
+            setting.link_types[2],
+            setting.prior_shrink[2],
         ),
         gating=build_gating_prior(
             inputs.Z,

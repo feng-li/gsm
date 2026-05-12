@@ -1,6 +1,16 @@
 """Model kernels used by the variational inference code."""
 
-from . import betareg, gamma, gaussian, lognormal, negbin, poisson, splitnormal, splitt
+from . import (
+    betareg,
+    gamma,
+    gaussian,
+    lognormal,
+    negbin,
+    poisson,
+    splitnormal,
+    splitt,
+    studentt,
+)
 
 __all__ = [
     "betareg",
@@ -11,4 +21,5 @@ __all__ = [
     "poisson",
     "splitnormal",
     "splitt",
+    "studentt",
 ]

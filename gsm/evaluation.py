@@ -18,6 +18,7 @@ from .config import (
     LogNormalRepMixtureSetting,
     SplitNormalMixtureSetting,
     SplitTMixtureSetting,
+    StudentTMixtureSetting,
 )
 from .data import Dataset, subset_dataset
 from .models.betareg import log_prob_observations as betareg_log_prob_observations
@@ -26,6 +27,7 @@ from .models.gaussian import log_prob_observations as gaussian_log_prob_observat
 from .models.lognormal import log_prob_observations as lognormal_log_prob_observations
 from .models.splitnormal import log_prob_observations as splitnormal_log_prob_observations
 from .models.splitt import log_prob_observations as splitt_log_prob_observations
+from .models.studentt import log_prob_observations as studentt_log_prob_observations
 from .variational import (
     BetaRegMixtureStandardization,
     GammaMixtureStandardization,
@@ -33,6 +35,7 @@ from .variational import (
     LogNormalMixtureStandardization,
     SplitNormalMixtureStandardization,
     SplitTMixtureStandardization,
+    StudentTMixtureStandardization,
     VariationalResult,
     fit_betareg_mixture_standardization,
     fit_gamma_mixture_standardization,
@@ -40,6 +43,7 @@ from .variational import (
     fit_lognormal_mixture_standardization,
     fit_splitnormal_mixture_standardization,
     fit_splitt_mixture_standardization,
+    fit_studentt_mixture_standardization,
     fit_variational,
     prepare_betareg_mixture_inputs,
     prepare_gamma_mixture_inputs,
@@ -47,18 +51,21 @@ from .variational import (
     prepare_lognormal_mixture_inputs,
     prepare_splitnormal_mixture_inputs,
     prepare_splitt_mixture_inputs,
+    prepare_studentt_mixture_inputs,
     sample_betareg_mixture_posterior,
     sample_gamma_mixture_posterior,
     sample_gaussian_mixture_posterior,
     sample_lognormal_mixture_posterior,
     sample_splitnormal_mixture_posterior,
     sample_splitt_mixture_posterior,
+    sample_studentt_mixture_posterior,
     tree_to_betareg_params,
     tree_to_gamma_params,
     tree_to_gaussian_params,
     tree_to_lognormal_params,
     tree_to_splitnormal_params,
     tree_to_splitt_params,
+    tree_to_studentt_params,
 )
 
 
@@ -71,6 +78,7 @@ ModelSetting = (
     | LogNormalRepMixtureSetting
     | SplitNormalMixtureSetting
     | SplitTMixtureSetting
+    | StudentTMixtureSetting
 )
 ModelStandardization = (
     BetaRegMixtureStandardization
@@ -79,6 +87,7 @@ ModelStandardization = (
     | LogNormalMixtureStandardization
     | SplitNormalMixtureStandardization
     | SplitTMixtureStandardization
+    | StudentTMixtureStandardization
 )
 
 
@@ -225,6 +234,8 @@ def _fit_model_standardization(
         return fit_splitnormal_mixture_standardization(dataset, setting)
     if isinstance(setting, SplitTMixtureSetting):
         return fit_splitt_mixture_standardization(dataset, setting)
+    if isinstance(setting, StudentTMixtureSetting):
+        return fit_studentt_mixture_standardization(dataset, setting)
     raise NotImplementedError(f"no standardization for model type {type(setting)!r}")
 
 
@@ -245,6 +256,8 @@ def _prepare_model_inputs(
         return prepare_splitnormal_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, SplitTMixtureSetting):
         return prepare_splitt_mixture_inputs(dataset, setting, standardization)
+    if isinstance(setting, StudentTMixtureSetting):
+        return prepare_studentt_mixture_inputs(dataset, setting, standardization)
     raise NotImplementedError(f"no input builder for model type {type(setting)!r}")
 
 
@@ -261,6 +274,8 @@ def _sample_model_posterior(posterior, setting: ModelSetting, seed: int, n_sampl
         return sample_splitnormal_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, SplitTMixtureSetting):
         return sample_splitt_mixture_posterior(posterior, seed, n_samples)
+    if isinstance(setting, StudentTMixtureSetting):
+        return sample_studentt_mixture_posterior(posterior, seed, n_samples)
     raise NotImplementedError(f"no posterior sampler for model type {type(setting)!r}")
 
 
@@ -277,6 +292,8 @@ def _tree_to_model_params(sample_tree, setting: ModelSetting):
         return tree_to_splitnormal_params(sample_tree)
     if isinstance(setting, SplitTMixtureSetting):
         return tree_to_splitt_params(sample_tree)
+    if isinstance(setting, StudentTMixtureSetting):
+        return tree_to_studentt_params(sample_tree)
     raise NotImplementedError(f"no tree conversion for model type {type(setting)!r}")
 
 
@@ -332,6 +349,15 @@ def _pointwise_log_prob(params, inputs, setting: ModelSetting):
             jnp.asarray(inputs.X_df),
             jnp.asarray(inputs.X_scale),
             jnp.asarray(inputs.X_skewness),
+            jnp.asarray(inputs.Z),
+        )
+    if isinstance(setting, StudentTMixtureSetting):
+        return studentt_log_prob_observations(
+            params,
+            jnp.asarray(inputs.y),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_df),
+            jnp.asarray(inputs.X_scale),
             jnp.asarray(inputs.Z),
         )
     raise NotImplementedError(f"no pointwise log probability for model type {type(setting)!r}")

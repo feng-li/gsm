@@ -39,6 +39,7 @@ comparison.
 - Beta-regression mixture kernel for the Rajan debt-ratio example.
 - Gamma/GammaRep mixture kernel with shared mean-variance or shape-scale
   parameterization.
+- Symmetric Student-t mixture kernel with mean, degrees of freedom, and scale.
 - Mean-field Gaussian variational posterior over mixture coefficients.
 - Optional ARD shrinkage for non-constant covariates.
 - Posterior-sampled held-out ELPD/LPDS for chronological train/test evaluation.
@@ -114,11 +115,15 @@ gsm/
     betareg.py              # BetaReg VB fitting
     splitnormal.py          # split-normal VB fitting
     splitt.py               # split-t VB fitting
+    studentt.py             # symmetric Student-t VB fitting
   models/
     betareg.py              # beta-regression mixture log-density
     gamma.py                # gamma mixture log-density and predictions
     gaussian.py             # Gaussian mixture log-density and predictions
     lognormal.py            # lognormal mixture log-density and predictions
+    splitnormal.py          # split-normal mixture log-density and predictions
+    splitt.py               # split-t mixture log-density and predictions
+    studentt.py             # symmetric Student-t mixture log-density and predictions
     poisson.py              # early migration kernel
     negbin.py               # early migration kernel
 scripts/

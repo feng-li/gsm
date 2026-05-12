@@ -15,6 +15,7 @@ from .config import (
     ModelConfig,
     SplitNormalMixtureSetting,
     SplitTMixtureSetting,
+    StudentTMixtureSetting,
 )
 from .data import Dataset
 from .vi.common import VariationalResult
@@ -108,6 +109,21 @@ from .vi.splitt import (
     tree_to_splitt_params,
     tree_to_splitt_posterior,
 )
+from .vi.studentt import (
+    StudentTMixtureInputs,
+    StudentTMixturePosterior,
+    StudentTMixtureStandardization,
+    fit_studentt_mixture_standardization,
+    fit_studentt_mixture_vb,
+    initialize_studentt_mixture_params,
+    initialize_studentt_mixture_variational_params,
+    prepare_studentt_mixture_inputs,
+    sample_studentt_mixture_posterior,
+    studentt_mixture_elbo,
+    studentt_mixture_variational_elbo,
+    tree_to_studentt_params,
+    tree_to_studentt_posterior,
+)
 
 
 def fit_variational(
@@ -122,6 +138,7 @@ def fit_variational(
         | LogNormalRepMixtureSetting
         | SplitNormalMixtureSetting
         | SplitTMixtureSetting
+        | StudentTMixtureSetting
     ),
     fit: FitConfig | None = None,
 ) -> VariationalResult:
@@ -139,4 +156,6 @@ def fit_variational(
         return fit_splitnormal_mixture_vb(dataset, model, fit)
     if isinstance(model, SplitTMixtureSetting):
         return fit_splitt_mixture_vb(dataset, model, fit)
+    if isinstance(model, StudentTMixtureSetting):
+        return fit_studentt_mixture_vb(dataset, model, fit)
     raise NotImplementedError(f"no variational implementation for model type {type(model)!r}")
