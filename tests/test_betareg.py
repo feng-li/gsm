@@ -20,7 +20,7 @@ def test_rajan_betareg_setting_matches_matlab_defaults():
     setting = rajan_betareg_mixture_setting()
 
     assert setting.model_name == "BetaReg"
-    assert setting.data_file_name == "Rajan.csv"
+    assert not hasattr(setting, "data_file_name")
     assert setting.feature_names == ("Mean", "Disp")
     assert setting.link_types == ("logit", "log")
     assert setting.covs == (tuple(range(5)), tuple(range(5)))

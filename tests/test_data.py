@@ -23,10 +23,10 @@ def test_load_sp500_calendar_csv():
     assert dataset.date[8] == "1990-01-12"
 
 
-def test_sp500_gaussian_setting_uses_sp500_csv():
+def test_sp500_gaussian_setting_is_data_source_agnostic():
     setting = sp500_gaussian_mixture_setting()
 
-    assert setting.data_file_name == "sp500_1990-2009_calendar.csv"
+    assert not hasattr(setting, "data_file_name")
     assert setting.n_components == 3
     assert setting.covs == ((0,), tuple(range(10)))
     assert setting.covs_mix == tuple(range(10))

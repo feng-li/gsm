@@ -49,21 +49,17 @@ FIT = FitConfig(
 )
 
 
-DATA_PATH = PYTHON_CODE_ROOT / "data" / MODEL.data_file_name
-
-
-def load_default_dataset():
-    """Load the default Rajan CSV for the beta-regression mixture model."""
+def load_dataset(data_path: str | Path):
+    """Load a caller-provided CSV for the beta-regression mixture model."""
 
     return load_csv_dataset(
-        DATA_PATH,
+        data_path,
         response_column="debtratio",
         add_constant=MODEL.add_constant,
     )
 
 
 if __name__ == "__main__":
-    print(f"Data: {DATA_PATH}")
     print(f"Model: {MODEL.model_name}, components={MODEL.n_components}")
     print(f"Features: {MODEL.feature_names}")
     print(f"Links: {MODEL.link_types}")

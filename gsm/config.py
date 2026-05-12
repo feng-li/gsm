@@ -54,7 +54,6 @@ class GaussianMixtureSetting:
     """
 
     model_name: str = "HeteroGauss"
-    data_file_name: str = "simpleUnivDens"
     feature_names: tuple[str, str] = ("Mean", "Variance")
     link_types: tuple[str, str] = ("identity", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = ((0,), (0,))
@@ -77,7 +76,6 @@ class BetaRegMixtureSetting:
     """Minimal Python version of the Rajan ``BetaReg`` GSM setting."""
 
     model_name: str = "BetaReg"
-    data_file_name: str = "Rajan.csv"
     feature_names: tuple[str, str] = ("Mean", "Disp")
     link_types: tuple[str, str] = ("logit", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = (
@@ -109,7 +107,6 @@ class BinomialMixtureSetting:
     """
 
     model_name: str = "Bin"
-    data_file_name: str = "binomial_trials.csv"
     feature_names: tuple[str] = ("Mean",)
     link_types: tuple[str] = ("logit",)
     covs: tuple[tuple[int, ...]] = (tuple(range(7)),)
@@ -135,7 +132,6 @@ class BetaBinMixtureSetting:
     """
 
     model_name: str = "BetaBin"
-    data_file_name: str = "binomial_trials.csv"
     feature_names: tuple[str, str] = ("Mean", "Disp")
     link_types: tuple[str, str] = ("logit", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = (
@@ -164,7 +160,6 @@ class PoissonMixtureSetting:
     """Minimal Python version of the mdvisits ``Pois`` GSM setting."""
 
     model_name: str = "Pois"
-    data_file_name: str = "mdvisitsReduced.mat"
     feature_names: tuple[str] = ("Mean",)
     link_types: tuple[str] = ("log",)
     covs: tuple[tuple[int, ...]] = (tuple(range(8)),)
@@ -187,7 +182,6 @@ class NegBinMixtureSetting:
     """Minimal Python version of the mdvisits ``NegBin`` GSM setting."""
 
     model_name: str = "NegBin"
-    data_file_name: str = "mdvisitsReduced.mat"
     feature_names: tuple[str, str] = ("Mean", "Disp")
     link_types: tuple[str, str] = ("log", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = (
@@ -216,7 +210,6 @@ class GenPoissonMixtureSetting:
     """Minimal Python version of the mdvisits ``GenPois`` GSM setting."""
 
     model_name: str = "GenPois"
-    data_file_name: str = "mdvisitsReduced.mat"
     feature_names: tuple[str, str] = ("Mean", "Disp")
     link_types: tuple[str, str] = ("log", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = (
@@ -246,7 +239,6 @@ class GenPoissonAltMixtureSetting:
     """Minimal Python version of MATLAB's ``GenPoisAlt`` GSM setting."""
 
     model_name: str = "GenPoisAlt"
-    data_file_name: str = "nBideBayNew.dat"
     feature_names: tuple[str, str] = ("Mean", "Disp")
     link_types: tuple[str, str] = ("log", "log1")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = (
@@ -276,7 +268,6 @@ class LogNormalMixtureSetting:
     """Minimal Python version of MATLAB's ``LogNorm`` GSM setting."""
 
     model_name: str = "LogNorm"
-    data_file_name: str = "simpleUnivDens"
     feature_names: tuple[str, str] = ("Mean", "Scale")
     link_types: tuple[str, str] = ("log", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = ((0,), (0,))
@@ -300,7 +291,6 @@ class LogNormalRepMixtureSetting:
     """Minimal Python version of MATLAB's ``LogNormRep`` GSM setting."""
 
     model_name: str = "LogNormRep"
-    data_file_name: str = "simpleUnivDens"
     feature_names: tuple[str, str] = ("Mean", "Scale")
     link_types: tuple[str, str] = ("log", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = ((0,), (0,))
@@ -324,7 +314,6 @@ class GammaMixtureSetting:
     """Minimal Python version of MATLAB's ``Gamma`` GSM setting."""
 
     model_name: str = "Gamma"
-    data_file_name: str = "simpleUnivDens"
     feature_names: tuple[str, str] = ("Mean", "Variance")
     link_types: tuple[str, str] = ("log", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = ((0,), (0,))
@@ -348,7 +337,6 @@ class GammaRepMixtureSetting:
     """Response-equivalent Gamma setting using direct shape/scale features."""
 
     model_name: str = "GammaRep"
-    data_file_name: str = "simpleUnivDens"
     feature_names: tuple[str, str] = ("Shape", "Scale")
     link_types: tuple[str, str] = ("log", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...]] = ((0,), (0,))
@@ -376,7 +364,6 @@ class SplitTMixtureSetting:
     """
 
     model_name: str = "SplitT"
-    data_file_name: str = "sp500_1990-2009_calendar.csv"
     feature_names: tuple[str, str, str, str] = ("Mean", "DF", "Scale", "Skewness")
     link_types: tuple[str, str, str, str] = ("identity", "log", "log", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...], tuple[int, ...]] = (
@@ -414,7 +401,6 @@ class SplitNormalMixtureSetting:
     """Minimal Python version of MATLAB's asymmetric normal GSM setting."""
 
     model_name: str = "SplitNormal"
-    data_file_name: str = "sp500_1990-2009_calendar.csv"
     feature_names: tuple[str, str, str] = ("Mean", "Sigma", "Skewness")
     link_types: tuple[str, str, str] = ("identity", "log", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]] = (
@@ -445,7 +431,6 @@ class StudentTMixtureSetting:
     """Minimal Python version of MATLAB's symmetric ``studT`` model."""
 
     model_name: str = "StudT"
-    data_file_name: str = "simpleUnivDens"
     feature_names: tuple[str, str, str] = ("Mean", "DF", "Scale")
     link_types: tuple[str, str, str] = ("identity", "log", "log")
     covs: tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]] = (
@@ -552,7 +537,7 @@ def studentt_mixture_setting(n_components: int = 2) -> StudentTMixtureSetting:
 
 
 def sp500_gaussian_mixture_setting(n_components: int = 3) -> GaussianMixtureSetting:
-    """Gaussian mixture setting for ``sp500_1990-2009_calendar.csv``.
+    """Gaussian mixture setting for the S&P 500 covariate layout.
 
     This follows the S&P 500 asymmetric Student-t scripts where the mean uses
     only the intercept while scale-like features and gating use the first ten
@@ -561,7 +546,6 @@ def sp500_gaussian_mixture_setting(n_components: int = 3) -> GaussianMixtureSett
     """
 
     return GaussianMixtureSetting(
-        data_file_name="sp500_1990-2009_calendar.csv",
         covs=((0,), tuple(range(10))),
         covs_mix=tuple(range(10)),
         add_constant=True,
@@ -571,12 +555,12 @@ def sp500_gaussian_mixture_setting(n_components: int = 3) -> GaussianMixtureSett
 
 
 def sp500_splitt_mixture_setting(n_components: int = 3) -> SplitTMixtureSetting:
-    """Split-t mixture setting for ``sp500_1990-2009_calendar.csv``."""
+    """Split-t mixture setting for the S&P 500 covariate layout."""
 
     return SplitTMixtureSetting(n_components=n_components)
 
 
 def sp500_splitnormal_mixture_setting(n_components: int = 1) -> SplitNormalMixtureSetting:
-    """Split-normal mixture setting for ``sp500_1990-2009_calendar.csv``."""
+    """Split-normal mixture setting for the S&P 500 covariate layout."""
 
     return SplitNormalMixtureSetting(n_components=n_components)

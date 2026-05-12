@@ -168,7 +168,6 @@ def _load_group_dataset(group: str, args):
 def _group_model_specs(group: str, components: int) -> list[ModelSpec]:
     if group == "returns":
         studentt = StudentTMixtureSetting(
-            data_file_name="sp500_1990-2009_calendar.csv",
             covs=((0,), tuple(range(10)), tuple(range(10))),
             covs_mix=tuple(range(10)),
             add_constant=True,

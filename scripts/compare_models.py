@@ -43,6 +43,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compare S&P 500 Gaussian, split-t, and split-normal mixtures.",
     )
+    parser.add_argument("--data", type=Path, default=DATA_PATH)
     parser.add_argument("--max-iter", type=int, default=100)
     parser.add_argument("--learning-rate", type=float, default=1e-2)
     parser.add_argument("--restarts", type=int, default=1)
@@ -71,7 +72,7 @@ def main() -> None:
         ("splitnormal", sp500_splitnormal_mixture_setting(splitnormal_components)),
     ]
     dataset = load_csv_dataset(
-        DATA_PATH,
+        args.data,
         response_column="Returns",
         add_constant=True,
     )
@@ -94,7 +95,7 @@ def main() -> None:
         for label, setting in models
     ]
 
-    print(f"data: {DATA_PATH}")
+    print(f"data: {args.data}")
     print(f"rows: {dataset.y.shape[0]}")
     print(f"train rows: {comparisons[0].heldout.train_indices.shape[0]}")
     print(f"test rows: {comparisons[0].heldout.test_indices.shape[0]}")

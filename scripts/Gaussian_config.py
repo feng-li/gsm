@@ -78,33 +78,31 @@ FIT = FitConfig(
 )
 
 
-DATA_PATH = PYTHON_CODE_ROOT / "data" / MODEL.data_file_name
-
-
-def load_default_dataset():
-    """Load the default S&P 500 CSV for the Gaussian mixture model."""
+def load_dataset(data_path: str | Path):
+    """Load a caller-provided CSV for the Gaussian mixture model."""
 
     return load_csv_dataset(
-        DATA_PATH,
+        data_path,
         response_column="Returns",
         add_constant=MODEL.add_constant,
     )
 
 
-def as_dict():
+def as_dict(data_path: str | Path | None = None):
     """Return a simple serializable view for scripts and notebooks."""
 
-    return {
-        "data_path": str(DATA_PATH),
+    config = {
         "run_defaults": RUN_DEFAULTS,
         "model": MODEL,
         "fit": FIT,
     }
+    if data_path is not None:
+        config["data_path"] = str(data_path)
+    return config
 
 
 if __name__ == "__main__":
     config = as_dict()
-    print(f"Data: {config['data_path']}")
     print(f"Model: {MODEL.model_name}, components={MODEL.n_components}")
     print(f"Features: {MODEL.feature_names}")
     print(f"Links: {MODEL.link_types}")

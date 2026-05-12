@@ -11,11 +11,15 @@ if str(PYTHON_CODE_ROOT) not in sys.path:
 
 from gsm.evaluation import fit_heldout_model_lpds
 from gsm.variational import fit_variational
-from scripts.BetaReg_config import FIT, MODEL, load_default_dataset
+from scripts.BetaReg_config import FIT, MODEL, load_dataset
+
+
+DEFAULT_DATA_PATH = PYTHON_CODE_ROOT / "data" / "Rajan.csv"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--data", type=Path, default=DEFAULT_DATA_PATH)
     parser.add_argument("--max-iter", type=int, default=200)
     parser.add_argument("--learning-rate", type=float, default=FIT.learning_rate)
     parser.add_argument("--restarts", type=int, default=1)
@@ -35,7 +39,7 @@ def main() -> None:
     parser.add_argument("--ard", action="store_true", default=FIT.use_ard)
     args = parser.parse_args()
 
-    dataset = load_default_dataset()
+    dataset = load_dataset(args.data)
     fit = replace(
         FIT,
         max_iter=args.max_iter,
@@ -56,6 +60,7 @@ def main() -> None:
         )
         result = heldout.train_result
         print(f"rows: {dataset.y.shape[0]}")
+        print(f"data: {args.data}")
         print(f"train rows: {heldout.train_indices.shape[0]}")
         print(f"test rows: {heldout.test_indices.shape[0]}")
         print(f"components: {MODEL.n_components}")
@@ -70,6 +75,7 @@ def main() -> None:
 
     result = fit_variational(dataset, MODEL, fit)
     print(f"rows: {dataset.y.shape[0]}")
+    print(f"data: {args.data}")
     print(f"components: {MODEL.n_components}")
     print(f"ard: {fit.use_ard}")
     print(f"iterations: {len(result.elbo_history)}")
