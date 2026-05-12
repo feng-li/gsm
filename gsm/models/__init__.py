@@ -4,6 +4,7 @@ from . import (
     betareg,
     betabinomial,
     binomial,
+    exphazard,
     gamma,
     genpoisson,
     gaussian,
@@ -13,12 +14,14 @@ from . import (
     splitnormal,
     splitt,
     studentt,
+    weibull_survival,
 )
 
 __all__ = [
     "betareg",
     "betabinomial",
     "binomial",
+    "exphazard",
     "gamma",
     "genpoisson",
     "gaussian",
@@ -28,4 +31,5 @@ __all__ = [
     "splitnormal",
     "splitt",
     "studentt",
+    "weibull_survival",
 ]

@@ -1,7 +1,6 @@
 # GSM Python Model Status
 
-This table tracks migration status for model kernels found in
-`MatlabCode/models` and the current Python VB target.
+This table tracks migration status for model kernels and the current Python VB target.
 
 | Model | Python name | Kernel | VB | Held-out ELPD | MATLAB density check | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -20,6 +19,8 @@ This table tracks migration status for model kernels found in
 | `BetaBin` | `BetaBinMixtureSetting` | Yes | Yes | Yes | Yes | Two-column response `[successes, trials]`; MATLAB phi precision parameterization. |
 | `GenPois` | `GenPoissonMixtureSetting` | Yes | Yes | Yes | Yes | mdvisits setting available; MATLAB mean/dispersion parameterization. |
 | `GenPoisAlt` | `GenPoissonAltMixtureSetting` | Yes | Yes | Yes | Yes | Czado-style parameterization with `log1` dispersion link. |
+| `ExpHazard` | `exphazard.py` | Yes | No | No | Yes | Interval-survival likelihood kernel reimplemented from the old archive; VB response convention still pending. |
+| `WeibullSurvival` | `weibull_survival.py` | Yes | No | No | Yes | Interval-survival likelihood kernel reimplemented from the old archive; VB response convention still pending. |
 
 ## Next Validation Work
 
@@ -31,3 +32,5 @@ This table tracks migration status for model kernels found in
 - Extend the mdvisits count comparison to include GenPois.
 - Add a real binomial-trials example before extending Bin/BetaBin comparison
   scripts.
+- Decide the survival response convention before wiring ExpHazard/WeibullSurvival
+  into VB and held-out ELPD.

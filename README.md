@@ -44,6 +44,7 @@ comparison.
 - Gamma/GammaRep mixture kernel with shared mean-variance or shape-scale
   parameterization.
 - Symmetric Student-t mixture kernel with mean, degrees of freedom, and scale.
+- Exponential-hazard and Weibull interval-survival mixture kernels.
 - Mean-field Gaussian variational posterior over mixture coefficients.
 - Optional ARD shrinkage for non-constant covariates.
 - Posterior-sampled held-out ELPD/LPDS for chronological train/test evaluation.
@@ -146,6 +147,7 @@ gsm/
     betabinomial.py         # beta-binomial mixture log-density and predictions
     betareg.py              # beta-regression mixture log-density
     binomial.py             # binomial mixture log-density and predictions
+    exphazard.py            # exponential-hazard interval-survival log-density
     gamma.py                # gamma mixture log-density and predictions
     genpoisson.py           # generalized Poisson mixture log-density and predictions
     gaussian.py             # Gaussian mixture log-density and predictions
@@ -155,6 +157,7 @@ gsm/
     splitnormal.py          # split-normal mixture log-density and predictions
     splitt.py               # split-t mixture log-density and predictions
     studentt.py             # symmetric Student-t mixture log-density and predictions
+    weibull_survival.py     # Weibull interval-survival log-density
 scripts/
   BetaReg_config.py         # default Rajan beta-regression specification
   Gaussian_config.py        # default S&P 500 Gaussian mixture specification
