@@ -102,6 +102,64 @@ class BetaRegMixtureSetting:
 
 
 @dataclass(frozen=True)
+class BinomialMixtureSetting:
+    """Minimal Python version of MATLAB's ``Bin`` GSM setting.
+
+    The response convention is a two-column matrix: ``successes, trials``.
+    """
+
+    model_name: str = "Bin"
+    data_file_name: str = "binomial_trials.csv"
+    feature_names: tuple[str] = ("Mean",)
+    link_types: tuple[str] = ("logit",)
+    covs: tuple[tuple[int, ...]] = (tuple(range(7)),)
+    covs_mix: tuple[int, ...] = tuple(range(7))
+    on_trial: tuple[tuple[int, ...]] = (tuple(range(1, 7)),)
+    on_trial_mix: tuple[int, ...] = tuple(range(1, 7))
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float] = (0.5,)
+    prior_std_feat: tuple[float] = (10.0,)
+    prior_shrink: tuple[float | str] = ("unitinfo",)
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float] = (0.5,)
+    prior_inclusion_mix: float = 0.5
+
+
+@dataclass(frozen=True)
+class BetaBinMixtureSetting:
+    """Minimal Python version of MATLAB's ``BetaBin`` GSM setting.
+
+    The response convention is a two-column matrix: ``successes, trials``.
+    """
+
+    model_name: str = "BetaBin"
+    data_file_name: str = "binomial_trials.csv"
+    feature_names: tuple[str, str] = ("Mean", "Disp")
+    link_types: tuple[str, str] = ("logit", "log")
+    covs: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(8)),
+        tuple(range(8)),
+    )
+    covs_mix: tuple[int, ...] = tuple(range(7))
+    on_trial: tuple[tuple[int, ...], tuple[int, ...]] = (
+        tuple(range(1, 7)),
+        tuple(range(1, 7)),
+    )
+    on_trial_mix: tuple[int, ...] = tuple(range(1, 7))
+    add_constant: bool = False
+    n_components: int = 2
+    standardize: int = 1
+    prior_mean_feat: tuple[float, float] = (0.5, 1.0)
+    prior_std_feat: tuple[float, float] = (10.0, 10.0)
+    prior_shrink: tuple[float | str, float | str] = ("unitinfo", "unitinfo")
+    prior_shrink_mix: float | str = "UnitInfo"
+    prior_inclusion: tuple[float, float] = (0.5, 0.5)
+    prior_inclusion_mix: float = 0.5
+
+
+@dataclass(frozen=True)
 class PoissonMixtureSetting:
     """Minimal Python version of the mdvisits ``Pois`` GSM setting."""
 
@@ -363,6 +421,18 @@ def rajan_betareg_mixture_setting(n_components: int = 2) -> BetaRegMixtureSettin
     """Return MATLAB ``Rajan`` BetaReg defaults with an adjustable component count."""
 
     return BetaRegMixtureSetting(n_components=n_components)
+
+
+def binomial_mixture_setting(n_components: int = 2) -> BinomialMixtureSetting:
+    """Return MATLAB ``Bin`` defaults with an adjustable component count."""
+
+    return BinomialMixtureSetting(n_components=n_components)
+
+
+def betabin_mixture_setting(n_components: int = 2) -> BetaBinMixtureSetting:
+    """Return MATLAB ``BetaBin`` defaults with an adjustable component count."""
+
+    return BetaBinMixtureSetting(n_components=n_components)
 
 
 def mdvisits_poisson_mixture_setting(n_components: int = 2) -> PoissonMixtureSetting:

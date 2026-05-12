@@ -107,3 +107,20 @@ def validate_count_response(y: np.ndarray) -> None:
         raise ValueError("count models require non-negative responses")
     if not np.allclose(y, np.round(y)):
         raise ValueError("count models require integer-valued responses")
+
+
+def validate_binomial_response(y: np.ndarray) -> None:
+    y = np.asarray(y)
+    if y.ndim != 2 or y.shape[1] != 2:
+        raise ValueError("Bin and BetaBin require y with columns [successes, trials]")
+    if not np.all(np.isfinite(y)):
+        raise ValueError("Bin and BetaBin require finite responses")
+    if not np.allclose(y, np.round(y)):
+        raise ValueError("Bin and BetaBin require integer-valued responses")
+
+    successes = y[:, 0]
+    trials = y[:, 1]
+    if np.any(successes < 0.0) or np.any(trials < 0.0):
+        raise ValueError("Bin and BetaBin require non-negative successes and trials")
+    if np.any(successes > trials):
+        raise ValueError("Bin and BetaBin require successes <= trials")

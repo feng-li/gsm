@@ -38,6 +38,8 @@ comparison.
   multinomial-logit gating.
 - Beta-regression mixture kernel for the Rajan debt-ratio example.
 - Poisson and negative-binomial mixture kernels for count-response examples.
+- Binomial and beta-binomial mixture kernels with two-column responses:
+  `successes, trials`.
 - Gamma/GammaRep mixture kernel with shared mean-variance or shape-scale
   parameterization.
 - Symmetric Student-t mixture kernel with mean, degrees of freedom, and scale.
@@ -97,6 +99,14 @@ python scripts/compare_continuous_models.py \
   --restarts 1
 ```
 
+Compare implemented count-response models:
+
+```bash
+python scripts/compare_count_models.py \
+  --max-iter 50 \
+  --restarts 1
+```
+
 Enable ARD shrinkage:
 
 ```bash
@@ -119,6 +129,8 @@ gsm/
   vi/
     common.py               # shared VB result and preprocessing helpers
     engine.py               # shared optimizer and posterior sampling helpers
+    betabinomial.py         # BetaBin VB fitting
+    binomial.py             # Bin VB fitting
     gamma.py                # Gamma/GammaRep VB fitting
     gaussian.py             # Gaussian-mixture VB fitting
     lognormal.py            # LogNorm/LogNormRep VB fitting
@@ -129,7 +141,9 @@ gsm/
     splitt.py               # split-t VB fitting
     studentt.py             # symmetric Student-t VB fitting
   models/
+    betabinomial.py         # beta-binomial mixture log-density and predictions
     betareg.py              # beta-regression mixture log-density
+    binomial.py             # binomial mixture log-density and predictions
     gamma.py                # gamma mixture log-density and predictions
     gaussian.py             # Gaussian mixture log-density and predictions
     lognormal.py            # lognormal mixture log-density and predictions
@@ -142,11 +156,13 @@ scripts/
   BetaReg_config.py         # default Rajan beta-regression specification
   Gaussian_config.py        # default S&P 500 Gaussian mixture specification
   compare_continuous_models.py
+  compare_count_models.py      # mdvisits Poisson/NegBin comparison
   run_betareg_rajan.py      # Rajan BetaReg command-line runner
   run_gaussian_sp500.py     # command-line runner
 tests/
   test_*.py                 # focused migration tests
 data/
+  mdvisits_reduced.csv
   Rajan.csv
   sp500_1990-2009.csv
   sp500_1990-2009_calendar.csv
@@ -208,3 +224,19 @@ The default Gaussian mixture script uses:
 ```text
 data/sp500_1990-2009_calendar.csv
 ```
+
+The count-model comparison script uses:
+
+```text
+data/mdvisits_reduced.csv
+```
+
+Binomial-family models use a two-column response convention:
+
+```text
+y[:, 0] = successes
+y[:, 1] = trials
+```
+
+For CSV files, use `load_binomial_csv_dataset(...)` with default response
+column names `successes` and `trials`.

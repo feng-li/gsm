@@ -1,28 +1,28 @@
-"""Variational inference for negative-binomial mixtures."""
+"""Variational inference for beta-binomial mixtures."""
 
 from dataclasses import dataclass
 
 import jax.numpy as jnp
 import numpy as np
 
-from gsm.config import FitConfig, NegBinMixtureSetting
+from gsm.config import BetaBinMixtureSetting, FitConfig
 from gsm.data import Dataset
-from gsm.models.negbin import (
-    NegBinMixtureParams,
-    log_prob as negbin_log_prob,
-    predict_mean_variance as negbin_predict_mean_variance,
-    responsibilities as negbin_responsibilities,
+from gsm.models.betabinomial import (
+    BetaBinMixtureParams,
+    log_prob as betabin_log_prob,
+    predict_mean_variance as betabin_predict_mean_variance,
+    responsibilities as betabin_responsibilities,
 )
 from gsm.priors import (
-    NegBinMixtureCoefficientPriors,
-    build_negbin_mixture_priors,
+    BetaBinMixtureCoefficientPriors,
+    build_betabin_mixture_priors,
     coefficient_log_prior_sum,
 )
 from gsm.vi.common import (
     VariationalResult,
     fit_design_standardization,
     standardize_designs,
-    validate_count_response,
+    validate_binomial_response,
 )
 from gsm.vi.engine import (
     initialize_mean_field_variational_params,
@@ -33,7 +33,7 @@ from gsm.vi.engine import (
 
 
 @dataclass(frozen=True)
-class NegBinMixtureInputs:
+class BetaBinMixtureInputs:
     y: np.ndarray
     X_mean: np.ndarray
     X_dispersion: np.ndarray
@@ -41,7 +41,7 @@ class NegBinMixtureInputs:
 
 
 @dataclass(frozen=True)
-class NegBinMixtureStandardization:
+class BetaBinMixtureStandardization:
     X_mean_c1: np.ndarray
     X_mean_c2: np.ndarray
     X_dispersion_c1: np.ndarray
@@ -51,43 +51,43 @@ class NegBinMixtureStandardization:
 
 
 @dataclass(frozen=True)
-class NegBinMixturePosterior:
-    """Mean-field Gaussian posterior over negative-binomial coefficients."""
+class BetaBinMixturePosterior:
+    """Mean-field Gaussian posterior over beta-binomial coefficients."""
 
-    mean: NegBinMixtureParams
-    log_std: NegBinMixtureParams
+    mean: BetaBinMixtureParams
+    log_std: BetaBinMixtureParams
 
 
-def prepare_negbin_mixture_inputs(
+def prepare_betabin_mixture_inputs(
     dataset: Dataset,
-    setting: NegBinMixtureSetting,
-    standardization: NegBinMixtureStandardization | None = None,
-) -> NegBinMixtureInputs:
-    """Build feature-specific design matrices for negative-binomial mixtures."""
+    setting: BetaBinMixtureSetting,
+    standardization: BetaBinMixtureStandardization | None = None,
+) -> BetaBinMixtureInputs:
+    """Build feature-specific design matrices for beta-binomial mixtures."""
 
-    validate_count_response(dataset.y)
-    X_mean, X_dispersion, Z = _raw_negbin_mixture_designs(dataset, setting)
+    validate_binomial_response(dataset.y)
+    X_mean, X_dispersion, Z = _raw_betabin_mixture_designs(dataset, setting)
     designs = standardize_designs(
         {"X_mean": X_mean, "X_dispersion": X_dispersion, "Z": Z},
         setting.standardize,
         standardization,
     )
-    return NegBinMixtureInputs(
-        y=dataset.y.reshape(-1),
+    return BetaBinMixtureInputs(
+        y=np.asarray(dataset.y, dtype=float),
         X_mean=designs["X_mean"],
         X_dispersion=designs["X_dispersion"],
         Z=designs["Z"],
     )
 
 
-def fit_negbin_mixture_standardization(
+def fit_betabin_mixture_standardization(
     dataset: Dataset,
-    setting: NegBinMixtureSetting,
-) -> NegBinMixtureStandardization:
-    """Fit the negative-binomial model-specific scaling constants."""
+    setting: BetaBinMixtureSetting,
+) -> BetaBinMixtureStandardization:
+    """Fit the beta-binomial model-specific scaling constants."""
 
-    X_mean, X_dispersion, Z = _raw_negbin_mixture_designs(dataset, setting)
-    return NegBinMixtureStandardization(
+    X_mean, X_dispersion, Z = _raw_betabin_mixture_designs(dataset, setting)
+    return BetaBinMixtureStandardization(
         **fit_design_standardization(
             {"X_mean": X_mean, "X_dispersion": X_dispersion, "Z": Z},
             setting.standardize,
@@ -95,27 +95,24 @@ def fit_negbin_mixture_standardization(
     )
 
 
-def initialize_negbin_mixture_params(
-    inputs: NegBinMixtureInputs,
-    setting: NegBinMixtureSetting,
+def initialize_betabin_mixture_params(
+    inputs: BetaBinMixtureInputs,
+    setting: BetaBinMixtureSetting,
 ) -> dict[str, jnp.ndarray]:
-    """Deterministic initialization for the negative-binomial VB optimizer."""
+    """Deterministic initialization for the beta-binomial VB optimizer."""
 
-    y = np.asarray(inputs.y)
+    rates = _success_rates(inputs.y)
     n_components = setting.n_components
     if n_components == 1:
-        means = np.asarray([np.mean(y)])
+        means = np.asarray([_pooled_rate(inputs.y)])
     else:
         quantiles = np.linspace(0.15, 0.85, n_components)
-        means = np.quantile(y, quantiles)
-    means = np.maximum(means, 1e-3)
-    variance = float(np.var(y, ddof=1)) if y.size > 1 else 0.0
-    global_mean = max(float(np.mean(y)), 1e-3)
-    overdispersion = max(variance - global_mean, 1e-3)
-    dispersion = np.clip(global_mean**2 / overdispersion, 1e-3, 1e4)
+        means = np.quantile(rates, quantiles)
+    means = np.clip(means, 1e-4, 1.0 - 1e-4)
+    dispersion = max(float(setting.prior_mean_feat[1]), 1e-3)
 
     mean_coef = np.zeros((n_components, inputs.X_mean.shape[1]))
-    mean_coef[:, 0] = np.log(means)
+    mean_coef[:, 0] = np.log(means / (1.0 - means))
     dispersion_coef = np.zeros((n_components, inputs.X_dispersion.shape[1]))
     dispersion_coef[:, 0] = np.log(dispersion)
     gating_coef = np.zeros((max(n_components - 1, 0), inputs.Z.shape[1]))
@@ -127,51 +124,51 @@ def initialize_negbin_mixture_params(
     }
 
 
-def initialize_negbin_mixture_variational_params(
-    inputs: NegBinMixtureInputs,
-    setting: NegBinMixtureSetting,
+def initialize_betabin_mixture_variational_params(
+    inputs: BetaBinMixtureInputs,
+    setting: BetaBinMixtureSetting,
     init_log_std: float = -5.0,
 ) -> dict[str, dict[str, jnp.ndarray]]:
     """Initialize a diagonal Gaussian variational family."""
 
-    mean_tree = initialize_negbin_mixture_params(inputs, setting)
+    mean_tree = initialize_betabin_mixture_params(inputs, setting)
     return initialize_mean_field_variational_params(mean_tree, init_log_std)
 
 
-def tree_to_negbin_params(tree: dict[str, jnp.ndarray]) -> NegBinMixtureParams:
-    return NegBinMixtureParams(
+def tree_to_betabin_params(tree: dict[str, jnp.ndarray]) -> BetaBinMixtureParams:
+    return BetaBinMixtureParams(
         mean_coef=tree["mean_coef"],
         dispersion_coef=tree["dispersion_coef"],
         gating_coef=tree["gating_coef"],
     )
 
 
-def tree_to_negbin_posterior(
+def tree_to_betabin_posterior(
     tree: dict[str, dict[str, jnp.ndarray]],
-) -> NegBinMixturePosterior:
-    return NegBinMixturePosterior(
-        mean=tree_to_negbin_params(tree["mean"]),
-        log_std=tree_to_negbin_params(tree["log_std"]),
+) -> BetaBinMixturePosterior:
+    return BetaBinMixturePosterior(
+        mean=tree_to_betabin_params(tree["mean"]),
+        log_std=tree_to_betabin_params(tree["log_std"]),
     )
 
 
-def negbin_mixture_elbo(
+def betabin_mixture_elbo(
     param_tree: dict[str, jnp.ndarray],
-    inputs: NegBinMixtureInputs,
+    inputs: BetaBinMixtureInputs,
     coefficient_prior_scale: float = 10.0,
     use_ard: bool = False,
     ard_shape: float = 1e-2,
     ard_rate: float = 1e-2,
-    coefficient_priors: NegBinMixtureCoefficientPriors | None = None,
+    coefficient_priors: BetaBinMixtureCoefficientPriors | None = None,
 ) -> jnp.ndarray:
-    """Collapsed-allocation ELBO for negative-binomial mixtures."""
+    """Collapsed-allocation ELBO for beta-binomial mixtures."""
 
-    params = tree_to_negbin_params(param_tree)
+    params = tree_to_betabin_params(param_tree)
     y = jnp.asarray(inputs.y)
     X_mean = jnp.asarray(inputs.X_mean)
     X_dispersion = jnp.asarray(inputs.X_dispersion)
     Z = jnp.asarray(inputs.Z)
-    log_likelihood = negbin_log_prob(params, y, X_mean, X_dispersion, Z)
+    log_likelihood = betabin_log_prob(params, y, X_mean, X_dispersion, Z)
     log_prior = coefficient_log_prior_sum(
         param_tree,
         (
@@ -199,20 +196,20 @@ def negbin_mixture_elbo(
     return log_likelihood + log_prior
 
 
-def negbin_mixture_variational_elbo(
+def betabin_mixture_variational_elbo(
     variational_tree: dict[str, dict[str, jnp.ndarray]],
-    inputs: NegBinMixtureInputs,
+    inputs: BetaBinMixtureInputs,
     noise_tree: dict[str, jnp.ndarray],
     coefficient_prior_scale: float = 10.0,
     use_ard: bool = False,
     ard_shape: float = 1e-2,
     ard_rate: float = 1e-2,
-    coefficient_priors: NegBinMixtureCoefficientPriors | None = None,
+    coefficient_priors: BetaBinMixtureCoefficientPriors | None = None,
 ) -> jnp.ndarray:
-    """Monte Carlo ELBO for a negative-binomial mean-field Gaussian posterior."""
+    """Monte Carlo ELBO for a beta-binomial mean-field Gaussian posterior."""
 
     def sample_log_joint(param_tree):
-        return negbin_mixture_elbo(
+        return betabin_mixture_elbo(
             param_tree,
             inputs,
             coefficient_prior_scale=coefficient_prior_scale,
@@ -225,17 +222,17 @@ def negbin_mixture_variational_elbo(
     return monte_carlo_variational_elbo(variational_tree, noise_tree, sample_log_joint)
 
 
-def sample_negbin_mixture_posterior(
-    posterior: NegBinMixturePosterior,
+def sample_betabin_mixture_posterior(
+    posterior: BetaBinMixturePosterior,
     seed: int,
     n_samples: int,
 ) -> dict[str, jnp.ndarray]:
-    """Draw coefficient trees from a fitted negative-binomial posterior."""
+    """Draw coefficient trees from a fitted beta-binomial posterior."""
 
-    return sample_posterior_tree(posterior, _negbin_params_to_tree, seed, n_samples)
+    return sample_posterior_tree(posterior, _betabin_params_to_tree, seed, n_samples)
 
 
-def _negbin_params_to_tree(params: NegBinMixtureParams) -> dict[str, jnp.ndarray]:
+def _betabin_params_to_tree(params: BetaBinMixtureParams) -> dict[str, jnp.ndarray]:
     return {
         "mean_coef": params.mean_coef,
         "dispersion_coef": params.dispersion_coef,
@@ -243,24 +240,24 @@ def _negbin_params_to_tree(params: NegBinMixtureParams) -> dict[str, jnp.ndarray
     }
 
 
-def fit_negbin_mixture_vb(
+def fit_betabin_mixture_vb(
     dataset: Dataset,
-    setting: NegBinMixtureSetting,
+    setting: BetaBinMixtureSetting,
     fit: FitConfig | None = None,
 ) -> VariationalResult:
-    """Fit the negative-binomial mixture scaffold with JAX gradients and Adam."""
+    """Fit the beta-binomial mixture scaffold with JAX gradients and Adam."""
 
     fit = fit or FitConfig()
-    inputs = prepare_negbin_mixture_inputs(dataset, setting)
-    coefficient_priors = build_negbin_mixture_priors(inputs, setting)
+    inputs = prepare_betabin_mixture_inputs(dataset, setting)
+    coefficient_priors = build_betabin_mixture_priors(inputs, setting)
     return optimize_restarts(
         fit,
-        lambda: initialize_negbin_mixture_variational_params(
+        lambda: initialize_betabin_mixture_variational_params(
             inputs,
             setting,
             init_log_std=fit.posterior_init_log_std,
         ),
-        lambda noise_tree: lambda q: negbin_mixture_variational_elbo(
+        lambda noise_tree: lambda q: betabin_mixture_variational_elbo(
             q,
             inputs,
             noise_tree,
@@ -270,15 +267,15 @@ def fit_negbin_mixture_vb(
             ard_rate=fit.ard_rate,
             coefficient_priors=coefficient_priors,
         ),
-        lambda variational_params, history, converged: _build_negbin_variational_result(
+        lambda variational_params, history, converged: _build_betabin_variational_result(
             variational_params, inputs, history, converged
         ),
     )
 
 
-def _raw_negbin_mixture_designs(
+def _raw_betabin_mixture_designs(
     dataset: Dataset,
-    setting: NegBinMixtureSetting,
+    setting: BetaBinMixtureSetting,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return (
         dataset.X[:, setting.covs[0]],
@@ -287,20 +284,24 @@ def _raw_negbin_mixture_designs(
     )
 
 
-def _build_negbin_variational_result(
+def _build_betabin_variational_result(
     variational_tree: dict[str, dict[str, jnp.ndarray]],
-    inputs: NegBinMixtureInputs,
+    inputs: BetaBinMixtureInputs,
     history: np.ndarray,
     converged: bool,
 ) -> VariationalResult:
-    posterior = tree_to_negbin_posterior(variational_tree)
+    posterior = tree_to_betabin_posterior(variational_tree)
     y = jnp.asarray(inputs.y)
     X_mean = jnp.asarray(inputs.X_mean)
     X_dispersion = jnp.asarray(inputs.X_dispersion)
     Z = jnp.asarray(inputs.Z)
-    resp = negbin_responsibilities(posterior.mean, y, X_mean, X_dispersion, Z)
-    pred_mean, pred_var = negbin_predict_mean_variance(
-        posterior.mean, X_mean, X_dispersion, Z
+    resp = betabin_responsibilities(posterior.mean, y, X_mean, X_dispersion, Z)
+    pred_mean, pred_var = betabin_predict_mean_variance(
+        posterior.mean,
+        X_mean,
+        X_dispersion,
+        Z,
+        trials=y,
     )
     return VariationalResult(
         params=posterior.mean,
@@ -311,3 +312,21 @@ def _build_negbin_variational_result(
         predictive_mean=np.asarray(pred_mean),
         predictive_variance=np.asarray(pred_var),
     )
+
+
+def _success_rates(y: np.ndarray) -> np.ndarray:
+    y = np.asarray(y, dtype=float)
+    successes = y[:, 0]
+    trials = y[:, 1]
+    mask = trials > 0.0
+    if not np.any(mask):
+        return np.asarray([0.5])
+    return np.clip(successes[mask] / trials[mask], 1e-4, 1.0 - 1e-4)
+
+
+def _pooled_rate(y: np.ndarray) -> float:
+    y = np.asarray(y, dtype=float)
+    total_trials = float(np.sum(y[:, 1]))
+    if total_trials <= 0.0:
+        return 0.5
+    return float(np.clip(np.sum(y[:, 0]) / total_trials, 1e-4, 1.0 - 1e-4))

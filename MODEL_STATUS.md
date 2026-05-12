@@ -16,8 +16,8 @@ This table tracks migration status for model kernels found in
 | `AsymStudT` | `SplitTMixtureSetting` | Yes | Yes | Yes | Partial | Python name uses split-t. |
 | `pois` | `PoissonMixtureSetting` | Yes | Yes | Yes | Partial | mdvisits setting available; density formula matched. |
 | `negBin` | `NegBinMixtureSetting` | Yes | Yes | Yes | Partial | mdvisits setting available; mean/dispersion parameterization matched. |
-| `Bin` | Not implemented | No | No | No | No | Needs two-column response `[successes, trials]`. |
-| `BetaBin` | Not implemented | No | No | No | No | Needs two-column response `[successes, trials]`. |
+| `Bin` | `BinomialMixtureSetting` | Yes | Yes | Yes | Yes | Two-column response `[successes, trials]`. |
+| `BetaBin` | `BetaBinMixtureSetting` | Yes | Yes | Yes | Yes | Two-column response `[successes, trials]`; MATLAB phi precision parameterization. |
 | `GenPois` | Not implemented | No | No | No | No | Needs count-mixture design. |
 | `GenPoisAlt` | Not implemented | No | No | No | No | Needs `log1` link and count-mixture design. |
 
@@ -27,5 +27,6 @@ This table tracks migration status for model kernels found in
   BetaReg against the MATLAB formulas.
 - Add real-data comparison reports for continuous models using
   `scripts/compare_continuous_models.py`.
-- Add real-data mdvisits comparison reports for Poisson and NegBin before
-  implementing `Bin` and `BetaBin`.
+- Add real-data mdvisits comparison reports for Poisson and NegBin.
+- Add a real binomial-trials example before extending Bin/BetaBin comparison
+  scripts.

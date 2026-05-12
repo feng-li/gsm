@@ -2,6 +2,8 @@
 
 from . import (
     betareg,
+    betabinomial,
+    binomial,
     gamma,
     gaussian,
     lognormal,
@@ -14,6 +16,8 @@ from . import (
 
 __all__ = [
     "betareg",
+    "betabinomial",
+    "binomial",
     "gamma",
     "gaussian",
     "lognormal",

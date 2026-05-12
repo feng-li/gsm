@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 from jax.scipy.special import gammaln
 import numpy as np
+from pathlib import Path
 
 from gsm.config import (
     FitConfig,
@@ -9,7 +10,7 @@ from gsm.config import (
     mdvisits_negbin_mixture_setting,
     mdvisits_poisson_mixture_setting,
 )
-from gsm.data import Dataset
+from gsm.data import Dataset, load_csv_dataset, subset_dataset
 from gsm.evaluation import fit_heldout_model_lpds
 from gsm.models.negbin import (
     NegBinMixtureParams,
@@ -30,6 +31,9 @@ from gsm.variational import (
     sample_negbin_mixture_posterior,
     sample_poisson_mixture_posterior,
 )
+
+
+DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "mdvisits_reduced.csv"
 
 
 def _count_dataset(y):
@@ -259,5 +263,46 @@ def test_count_heldout_lpds_smoke():
     assert negbin_result.test_score.pointwise.shape == (2,)
     assert poisson_result.test_score.n_posterior_samples == 3
     assert negbin_result.test_score.n_posterior_samples == 3
+    assert np.isfinite(poisson_result.test_score.elpd)
+    assert np.isfinite(negbin_result.test_score.elpd)
+
+
+def test_mdvisits_csv_real_data_smoke():
+    dataset = load_csv_dataset(
+        DATA_PATH,
+        response_column="numvisit",
+        add_constant=False,
+        date_column=None,
+    )
+    dataset = subset_dataset(dataset, np.arange(40))
+    poisson = mdvisits_poisson_mixture_setting(n_components=1)
+    negbin = mdvisits_negbin_mixture_setting(n_components=1)
+    fit = FitConfig(
+        seed=123,
+        max_iter=3,
+        learning_rate=0.005,
+        n_restarts=1,
+        tol=0.0,
+        n_elbo_samples=1,
+        n_predictive_samples=2,
+    )
+
+    assert dataset.y_name == "numvisit"
+    assert dataset.x_names == (
+        "const",
+        "reform",
+        "badh",
+        "loginc",
+        "educ2",
+        "educ3",
+        "age2",
+        "age3",
+    )
+
+    poisson_result = fit_heldout_model_lpds(dataset, poisson, fit, test_size=0.25)
+    negbin_result = fit_heldout_model_lpds(dataset, negbin, fit, test_size=0.25)
+
+    assert poisson_result.test_score.pointwise.shape == (10,)
+    assert negbin_result.test_score.pointwise.shape == (10,)
     assert np.isfinite(poisson_result.test_score.elpd)
     assert np.isfinite(negbin_result.test_score.elpd)

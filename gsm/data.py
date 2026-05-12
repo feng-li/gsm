@@ -113,6 +113,66 @@ def load_csv_dataset(
     )
 
 
+def load_binomial_csv_dataset(
+    path: str | Path,
+    successes_column: str = "successes",
+    trials_column: str = "trials",
+    feature_columns: tuple[str, ...] | None = None,
+    date_column: str | None = "Date",
+    drop_columns: tuple[str, ...] = ("DateDecimal",),
+    add_constant: bool = False,
+    constant_name: str = "Const",
+) -> Dataset:
+    """Load a binomial CSV with ``y[:, 0]`` successes and ``y[:, 1]`` trials."""
+
+    with Path(path).open(newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    if not rows:
+        raise ValueError("CSV file has no data rows")
+    missing = {successes_column, trials_column} - set(rows[0])
+    if missing:
+        raise KeyError(f"missing binomial response columns: {sorted(missing)}")
+
+    if feature_columns is None:
+        excluded = {successes_column, trials_column, *drop_columns}
+        if date_column is not None:
+            excluded.add(date_column)
+        feature_columns = tuple(
+            name for name in rows[0] if name not in excluded and _all_float(rows, name)
+        )
+
+    y = np.asarray(
+        [
+            [float(row[successes_column]), float(row[trials_column])]
+            for row in rows
+        ],
+        dtype=float,
+    )
+    X = np.asarray(
+        [[float(row[column]) for column in feature_columns] for row in rows],
+        dtype=float,
+    )
+    x_names = tuple(feature_columns)
+    if add_constant:
+        if constant_name in x_names:
+            raise ValueError(f"constant column already exists: {constant_name}")
+        X = np.column_stack([np.ones(X.shape[0]), X])
+        x_names = (constant_name, *x_names)
+
+    date = None
+    if date_column is not None and date_column in rows[0]:
+        date = tuple(row[date_column] for row in rows)
+
+    return Dataset(
+        y=y,
+        X=X,
+        y_name=f"{successes_column},{trials_column}",
+        x_names=x_names,
+        date=date,
+    )
+
+
 def standardize_covariates(X: np.ndarray, method: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Standardize like MATLAB ``StandardizeCovs.m``.
 

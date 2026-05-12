@@ -63,6 +63,23 @@ class BetaRegMixtureCoefficientPriors:
 
 
 @dataclass(frozen=True)
+class BinomialMixtureCoefficientPriors:
+    """Coefficient priors for binomial mixtures."""
+
+    mean: GaussianCoefficientPrior
+    gating: GaussianCoefficientPrior | None
+
+
+@dataclass(frozen=True)
+class BetaBinMixtureCoefficientPriors:
+    """Coefficient priors for beta-binomial mixtures."""
+
+    mean: GaussianCoefficientPrior
+    dispersion: GaussianCoefficientPrior
+    gating: GaussianCoefficientPrior | None
+
+
+@dataclass(frozen=True)
 class PoissonMixtureCoefficientPriors:
     """Coefficient priors for Poisson mixtures."""
 
@@ -143,7 +160,12 @@ def convert_prior_to_link_scale(
         link_mean = math.log(mean) - 0.5 * link_std**2
         return link_mean, link_std
     if name == "logit":
-        return _logit_prior_from_beta_kl(mean, std)
+        try:
+            return _logit_prior_from_beta_kl(mean, std)
+        except ValueError:
+            if not 0.0 < mean < 1.0:
+                raise
+            return math.log(mean / (1.0 - mean)), std
 
     link_mean = _link_eval_scalar(mean, link_type)
     deriv = _link_derivative_scalar(mean, link_type)
@@ -321,6 +343,57 @@ def build_betareg_mixture_priors(
     """Build all coefficient priors needed by beta-regression mixture VB fits."""
 
     return BetaRegMixtureCoefficientPriors(
+        mean=build_gaussian_coefficient_prior(
+            inputs.X_mean,
+            setting.prior_mean_feat[0],
+            setting.prior_std_feat[0],
+            setting.link_types[0],
+            setting.prior_shrink[0],
+        ),
+        dispersion=build_gaussian_coefficient_prior(
+            inputs.X_dispersion,
+            setting.prior_mean_feat[1],
+            setting.prior_std_feat[1],
+            setting.link_types[1],
+            setting.prior_shrink[1],
+        ),
+        gating=build_gating_prior(
+            inputs.Z,
+            setting.n_components,
+            setting.prior_shrink_mix,
+        ),
+    )
+
+
+def build_binomial_mixture_priors(
+    inputs: Any,
+    setting: Any,
+) -> BinomialMixtureCoefficientPriors:
+    """Build all coefficient priors needed by binomial mixture VB fits."""
+
+    return BinomialMixtureCoefficientPriors(
+        mean=build_gaussian_coefficient_prior(
+            inputs.X_mean,
+            setting.prior_mean_feat[0],
+            setting.prior_std_feat[0],
+            setting.link_types[0],
+            setting.prior_shrink[0],
+        ),
+        gating=build_gating_prior(
+            inputs.Z,
+            setting.n_components,
+            setting.prior_shrink_mix,
+        ),
+    )
+
+
+def build_betabin_mixture_priors(
+    inputs: Any,
+    setting: Any,
+) -> BetaBinMixtureCoefficientPriors:
+    """Build all coefficient priors needed by beta-binomial mixture VB fits."""
+
+    return BetaBinMixtureCoefficientPriors(
         mean=build_gaussian_coefficient_prior(
             inputs.X_mean,
             setting.prior_mean_feat[0],

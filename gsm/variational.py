@@ -5,7 +5,9 @@ existing import path stable while the migration grows.
 """
 
 from .config import (
+    BetaBinMixtureSetting,
     BetaRegMixtureSetting,
+    BinomialMixtureSetting,
     FitConfig,
     GammaMixtureSetting,
     GammaRepMixtureSetting,
@@ -35,6 +37,36 @@ from .vi.betareg import (
     sample_betareg_mixture_posterior,
     tree_to_betareg_params,
     tree_to_betareg_posterior,
+)
+from .vi.betabinomial import (
+    BetaBinMixtureInputs,
+    BetaBinMixturePosterior,
+    BetaBinMixtureStandardization,
+    betabin_mixture_elbo,
+    betabin_mixture_variational_elbo,
+    fit_betabin_mixture_standardization,
+    fit_betabin_mixture_vb,
+    initialize_betabin_mixture_params,
+    initialize_betabin_mixture_variational_params,
+    prepare_betabin_mixture_inputs,
+    sample_betabin_mixture_posterior,
+    tree_to_betabin_params,
+    tree_to_betabin_posterior,
+)
+from .vi.binomial import (
+    BinomialMixtureInputs,
+    BinomialMixturePosterior,
+    BinomialMixtureStandardization,
+    binomial_mixture_elbo,
+    binomial_mixture_variational_elbo,
+    fit_binomial_mixture_standardization,
+    fit_binomial_mixture_vb,
+    initialize_binomial_mixture_params,
+    initialize_binomial_mixture_variational_params,
+    prepare_binomial_mixture_inputs,
+    sample_binomial_mixture_posterior,
+    tree_to_binomial_params,
+    tree_to_binomial_posterior,
 )
 from .vi.gaussian import (
     GaussianMixtureInputs,
@@ -162,7 +194,9 @@ def fit_variational(
     dataset: Dataset,
     model: (
         ModelConfig
+        | BetaBinMixtureSetting
         | BetaRegMixtureSetting
+        | BinomialMixtureSetting
         | GammaMixtureSetting
         | GammaRepMixtureSetting
         | GaussianMixtureSetting
@@ -180,6 +214,10 @@ def fit_variational(
 
     if isinstance(model, BetaRegMixtureSetting):
         return fit_betareg_mixture_vb(dataset, model, fit)
+    if isinstance(model, BetaBinMixtureSetting):
+        return fit_betabin_mixture_vb(dataset, model, fit)
+    if isinstance(model, BinomialMixtureSetting):
+        return fit_binomial_mixture_vb(dataset, model, fit)
     if isinstance(model, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return fit_gamma_mixture_vb(dataset, model, fit)
     if isinstance(model, GaussianMixtureSetting):

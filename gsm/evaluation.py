@@ -9,7 +9,9 @@ from jax.nn import logsumexp
 import numpy as np
 
 from .config import (
+    BetaBinMixtureSetting,
     BetaRegMixtureSetting,
+    BinomialMixtureSetting,
     FitConfig,
     GammaMixtureSetting,
     GammaRepMixtureSetting,
@@ -23,7 +25,9 @@ from .config import (
     StudentTMixtureSetting,
 )
 from .data import Dataset, subset_dataset
+from .models.betabinomial import log_prob_observations as betabin_log_prob_observations
 from .models.betareg import log_prob_observations as betareg_log_prob_observations
+from .models.binomial import log_prob_observations as binomial_log_prob_observations
 from .models.gamma import log_prob_observations as gamma_log_prob_observations
 from .models.gaussian import log_prob_observations as gaussian_log_prob_observations
 from .models.lognormal import log_prob_observations as lognormal_log_prob_observations
@@ -33,7 +37,9 @@ from .models.splitnormal import log_prob_observations as splitnormal_log_prob_ob
 from .models.splitt import log_prob_observations as splitt_log_prob_observations
 from .models.studentt import log_prob_observations as studentt_log_prob_observations
 from .variational import (
+    BetaBinMixtureStandardization,
     BetaRegMixtureStandardization,
+    BinomialMixtureStandardization,
     GammaMixtureStandardization,
     GaussianMixtureStandardization,
     LogNormalMixtureStandardization,
@@ -43,7 +49,9 @@ from .variational import (
     SplitTMixtureStandardization,
     StudentTMixtureStandardization,
     VariationalResult,
+    fit_betabin_mixture_standardization,
     fit_betareg_mixture_standardization,
+    fit_binomial_mixture_standardization,
     fit_gamma_mixture_standardization,
     fit_gaussian_mixture_standardization,
     fit_lognormal_mixture_standardization,
@@ -53,7 +61,9 @@ from .variational import (
     fit_splitt_mixture_standardization,
     fit_studentt_mixture_standardization,
     fit_variational,
+    prepare_betabin_mixture_inputs,
     prepare_betareg_mixture_inputs,
+    prepare_binomial_mixture_inputs,
     prepare_gamma_mixture_inputs,
     prepare_gaussian_mixture_inputs,
     prepare_lognormal_mixture_inputs,
@@ -62,7 +72,9 @@ from .variational import (
     prepare_splitnormal_mixture_inputs,
     prepare_splitt_mixture_inputs,
     prepare_studentt_mixture_inputs,
+    sample_betabin_mixture_posterior,
     sample_betareg_mixture_posterior,
+    sample_binomial_mixture_posterior,
     sample_gamma_mixture_posterior,
     sample_gaussian_mixture_posterior,
     sample_lognormal_mixture_posterior,
@@ -71,7 +83,9 @@ from .variational import (
     sample_splitnormal_mixture_posterior,
     sample_splitt_mixture_posterior,
     sample_studentt_mixture_posterior,
+    tree_to_betabin_params,
     tree_to_betareg_params,
+    tree_to_binomial_params,
     tree_to_gamma_params,
     tree_to_gaussian_params,
     tree_to_lognormal_params,
@@ -84,7 +98,9 @@ from .variational import (
 
 
 ModelSetting = (
-    BetaRegMixtureSetting
+    BetaBinMixtureSetting
+    | BetaRegMixtureSetting
+    | BinomialMixtureSetting
     | GammaMixtureSetting
     | GammaRepMixtureSetting
     | GaussianMixtureSetting
@@ -97,7 +113,9 @@ ModelSetting = (
     | StudentTMixtureSetting
 )
 ModelStandardization = (
-    BetaRegMixtureStandardization
+    BetaBinMixtureStandardization
+    | BetaRegMixtureStandardization
+    | BinomialMixtureStandardization
     | GammaMixtureStandardization
     | GaussianMixtureStandardization
     | LogNormalMixtureStandardization
@@ -240,8 +258,12 @@ def _fit_model_standardization(
     dataset: Dataset,
     setting: ModelSetting,
 ) -> ModelStandardization:
+    if isinstance(setting, BetaBinMixtureSetting):
+        return fit_betabin_mixture_standardization(dataset, setting)
     if isinstance(setting, BetaRegMixtureSetting):
         return fit_betareg_mixture_standardization(dataset, setting)
+    if isinstance(setting, BinomialMixtureSetting):
+        return fit_binomial_mixture_standardization(dataset, setting)
     if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return fit_gamma_mixture_standardization(dataset, setting)
     if isinstance(setting, GaussianMixtureSetting):
@@ -266,8 +288,12 @@ def _prepare_model_inputs(
     setting: ModelSetting,
     standardization: ModelStandardization | None,
 ) -> Any:
+    if isinstance(setting, BetaBinMixtureSetting):
+        return prepare_betabin_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, BetaRegMixtureSetting):
         return prepare_betareg_mixture_inputs(dataset, setting, standardization)
+    if isinstance(setting, BinomialMixtureSetting):
+        return prepare_binomial_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return prepare_gamma_mixture_inputs(dataset, setting, standardization)
     if isinstance(setting, GaussianMixtureSetting):
@@ -288,8 +314,12 @@ def _prepare_model_inputs(
 
 
 def _sample_model_posterior(posterior, setting: ModelSetting, seed: int, n_samples: int):
+    if isinstance(setting, BetaBinMixtureSetting):
+        return sample_betabin_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, BetaRegMixtureSetting):
         return sample_betareg_mixture_posterior(posterior, seed, n_samples)
+    if isinstance(setting, BinomialMixtureSetting):
+        return sample_binomial_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return sample_gamma_mixture_posterior(posterior, seed, n_samples)
     if isinstance(setting, GaussianMixtureSetting):
@@ -310,8 +340,12 @@ def _sample_model_posterior(posterior, setting: ModelSetting, seed: int, n_sampl
 
 
 def _tree_to_model_params(sample_tree, setting: ModelSetting):
+    if isinstance(setting, BetaBinMixtureSetting):
+        return tree_to_betabin_params(sample_tree)
     if isinstance(setting, BetaRegMixtureSetting):
         return tree_to_betareg_params(sample_tree)
+    if isinstance(setting, BinomialMixtureSetting):
+        return tree_to_binomial_params(sample_tree)
     if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
         return tree_to_gamma_params(sample_tree)
     if isinstance(setting, GaussianMixtureSetting):
@@ -332,12 +366,27 @@ def _tree_to_model_params(sample_tree, setting: ModelSetting):
 
 
 def _pointwise_log_prob(params, inputs, setting: ModelSetting):
+    if isinstance(setting, BetaBinMixtureSetting):
+        return betabin_log_prob_observations(
+            params,
+            jnp.asarray(inputs.y),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_dispersion),
+            jnp.asarray(inputs.Z),
+        )
     if isinstance(setting, BetaRegMixtureSetting):
         return betareg_log_prob_observations(
             params,
             jnp.asarray(inputs.y),
             jnp.asarray(inputs.X_mean),
             jnp.asarray(inputs.X_dispersion),
+            jnp.asarray(inputs.Z),
+        )
+    if isinstance(setting, BinomialMixtureSetting):
+        return binomial_log_prob_observations(
+            params,
+            jnp.asarray(inputs.y),
+            jnp.asarray(inputs.X_mean),
             jnp.asarray(inputs.Z),
         )
     if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
