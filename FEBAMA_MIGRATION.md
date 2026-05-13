@@ -5,6 +5,12 @@ Source inspected: `/home/fli/code/archives/febama`.
 Target: add a small `gsm.febama` submodule that ports the R package
 `febama` as an application layer over the current Python GSM core.
 
+Status as of 2026-05-13: the first Python FEBAMA slice is implemented. The
+current code supports precomputed LPD/features, MAP fitting of softmax gating
+coefficients, a predictive-distribution registry, basic and optional base
+forecasters, `tsfeatures`-based feature extraction, feature cleaning/scaling,
+CSV feature-table loading, and a minimal runnable example script.
+
 ## Source Summary
 
 `febama` is an R package for feature-based Bayesian forecast model averaging.
@@ -95,10 +101,18 @@ Start with distributions already available in `gsm.models` when possible:
 | `gamma` | `mean`, `variance` or `shape`, `scale` | `gsm.models.gamma`. |
 | `poisson` and counts | distribution-specific count parameters | only when the response is discrete. |
 
-For the first migration slice, `compute_lpd_features()` can still accept
-precomputed `lpd`. The distribution registry becomes necessary when FEBAMA is
-asked to compute predictive densities from forecaster outputs. A forecaster
-should return a `PredictiveDistribution` object, not only `(mean, sd)`.
+Implemented status:
+
+- `PredictiveDistribution(name, params)` is the common object returned by base
+  forecasters.
+- `gsm.febama.distributions` provides the registry and `log_prob_matrix(...)`.
+- Registered distributions currently include `gaussian`, `studentt`,
+  `splitnormal`, `splitt`, `lognormal`, `gamma`, and `poisson`.
+- Base forecasters return Gaussian `PredictiveDistribution` objects for the
+  current examples.
+
+Remaining design rule: new forecasters should return a
+`PredictiveDistribution` object, not only `(mean, sd)`.
 
 ## Proposed Python Layout
 
@@ -107,10 +121,10 @@ Keep the submodule small and data-source agnostic:
 ```text
 gsm/febama/
   __init__.py
-  config.py          # FebamaConfig, FitConfig bridge, defaults
-  data.py            # SeriesData, CSV readers, rolling-origin helpers
+  config.py          # FebamaConfig and structural validation
+  data.py            # SeriesData and LpdFeatures containers
   distributions.py   # predictive distribution registry and log_prob adapters
-  forecasters.py     # naive, drift, optional statsmodels/arch adapters
+  forecasters.py     # naive, drift, optional statsforecast/arch adapters
   features.py        # feature extraction and feature cleaning/scaling
   scoring.py         # JAX logscore, softmax weights, predictive score utilities
   inference.py       # MAP first, then mean-field VB over gating coefficients
@@ -118,19 +132,52 @@ gsm/febama/
   api.py             # public workflow wrappers matching the R API shape
 ```
 
+Current implemented files:
+
+```text
+gsm/febama/
+  __init__.py
+  api.py
+  config.py
+  data.py
+  distributions.py
+  features.py
+  forecasters.py
+  inference.py
+  scoring.py
+```
+
+`forecast.py` remains a later recursive-forecasting layer.
+
 Do not put fixed data paths into config. Example scripts should accept `--data`
 and config objects should only describe model structure and fitting choices.
 
-## Public API Target
+## Public API
 
-Use Python names, but preserve the R workflow:
+Current implemented API:
 
 ```python
 from gsm.febama import (
     FebamaConfig,
-    compute_lpd_features,
+    LpdFeatures,
+    PredictiveDistribution,
     clean_features,
+    compute_tsfeatures,
+    compute_weights,
     fit_febama,
+    log_prob_matrix,
+    prepare_lpd_features,
+    read_precomputed_feature_table,
+    score_febama,
+    standardize_features,
+)
+```
+
+Target API still to add after recursive forecasting exists:
+
+```python
+from gsm.febama import (
+    compute_lpd_features,
     forecast_febama,
     summarize_performance,
 )
@@ -139,14 +186,14 @@ from gsm.febama import (
 Expected objects:
 
 - `SeriesData(x, xx=None, date=None)` for one time series.
-- `LpdFeatures(lpd, features, feature_mean=None, feature_sd=None, model_names=...)`.
+- `LpdFeatures(lpd, features, feature_mean=None, feature_sd=None, model_names=..., feature_names=...)`.
 - `PredictiveDistribution(name, params)` for component forecasts.
-- `FebamaResult(params/posterior, weights, objective_history, diagnostics)`.
+- `FebamaFit(method, beta, add_intercept, result)` for the current MAP fit.
 - `FebamaForecast(forecast, weights, log_score, mase, smape, details)`.
 
 ## Migration Phases
 
-### Phase 1: Kernel and API Skeleton
+### Phase 1: Kernel and API Skeleton - Done
 
 Implement the parts that are independent of R-only forecasting packages:
 
@@ -168,10 +215,21 @@ Implement the parts that are independent of R-only forecasting packages:
    - verify Gaussian predictive distribution reproduces the R `dnorm` path;
    - verify small/large log densities remain finite.
 
-This phase creates the `gsm.febama` submodule without requiring `statsmodels`,
-`arch`, S&P 500 downloads, or feature parity.
+This phase creates the `gsm.febama` submodule without requiring
+`statsforecast`, `arch`, S&P 500 downloads, or feature parity.
 
-### Phase 2: Inference for Gating Coefficients
+Implemented files/tests:
+
+- `gsm/febama/scoring.py`
+- `gsm/febama/distributions.py`
+- `gsm/febama/config.py`
+- `gsm/febama/data.py`
+- `gsm/febama/api.py`
+- `tests/test_febama_scoring.py`
+- `tests/test_febama_distributions.py`
+- `tests/test_febama_api.py`
+
+### Phase 2: Inference for Gating Coefficients - Partial
 
 Port inference as a GSM-compatible variational problem.
 
@@ -194,7 +252,21 @@ Acceptance tests:
 - MAP only updates active coefficients in a synthetic active-mask test.
 - VB returns finite ELBO/objective history and posterior-sampled weights.
 
-### Phase 3: Feature Cleaning and Precomputed Feature Mode
+Implemented:
+
+- MAP with `scipy.optimize.minimize` and JAX gradients.
+- Gaussian coefficient prior penalty.
+- active-mask packing/replacement behavior.
+- public `fit_febama(...)`, `compute_weights(...)`, and `score_febama(...)`.
+- tests in `tests/test_febama_inference.py`.
+
+Remaining:
+
+- mean-field Gaussian VB for FEBAMA gating coefficients.
+- posterior-sampled FEBAMA weights/scores.
+- optional ARD over gating-feature columns.
+
+### Phase 3: Feature Cleaning and Precomputed Feature Mode - Partial
 
 Port the R feature-cleaning contract before trying to reproduce all THA
 features.
@@ -217,7 +289,28 @@ Acceptance tests:
 - Bundled/table-like S&P 500 feature schemas can be read without hard-coded
   paths.
 
-### Phase 4: Base Forecasters
+Implemented:
+
+- `clean_features(...)` drops non-finite and constant feature columns, stores
+  feature means and standard deviations, and returns standardized features.
+- `standardize_features(...)` applies saved scaling and can align columns by
+  feature name.
+- `read_precomputed_feature_table(...)` loads CSV feature tables with explicit
+  feature, response, date/origin, and optional LPD columns.
+- `compute_tsfeatures(...)` wraps the installed Python `tsfeatures` package for
+  one time series.
+- `SP500_TABLE3_FEATURES` stores the 15 stock-market feature names from the R
+  S&P 500 example.
+- tests in `tests/test_febama_features.py`.
+
+Remaining:
+
+- public `compute_lpd_features(...)` workflow wrapper.
+- production rolling-origin feature/LPD constructor shared by scripts and
+  recursive forecasting.
+- exact R THA feature parity review, if needed for paper replication.
+
+### Phase 4: Base Forecasters - Partial
 
 Add base forecasters incrementally and keep optional dependencies optional.
 Each forecaster should declare or return its predictive distribution. This lets
@@ -231,8 +324,8 @@ Required first:
 
 Optional, behind extras or soft imports:
 
-- `ets_fore` via `statsmodels` exponential smoothing.
-- `auto_arima_fore` only if a reliable Python dependency is selected.
+- `ets_fore` via `statsforecast` `AutoETS`.
+- `auto_arima_fore` via `statsforecast` `AutoARIMA`.
 - `garch_fore` and `egarch_fore` via `arch`.
 - `rgarch_fore` and `sv_fore` are lower priority because direct R parity is
   more complex.
@@ -252,7 +345,25 @@ Acceptance tests:
   FEBAMA path;
 - optional forecasters skip cleanly when dependencies are absent.
 
-### Phase 5: Recursive Forecasting and Metrics
+Implemented:
+
+- `naive_fore(...)`.
+- `rw_drift_fore(...)`.
+- `ets_fore(...)` using `statsforecast`.
+- `auto_arima_fore(...)` using `statsforecast`.
+- `garch_fore(...)` and `egarch_fore(...)` using `arch`.
+- tests in `tests/test_febama_forecasters.py`.
+
+Remaining:
+
+- `rgarch_fore` equivalent. Python has no direct drop-in for the R `rugarch`
+  realized-GARCH workflow used in the R package.
+- `sv_fore` equivalent. Python has no direct drop-in for the R `stochvol`
+  workflow used in the R package.
+- richer non-Gaussian forecaster examples that return Student-t, split-t,
+  gamma, lognormal, or count predictive distributions.
+
+### Phase 5: Recursive Forecasting and Metrics - Not Started
 
 Port `R/forecast.R` after scoring, inference, and basic forecasters exist.
 
@@ -279,13 +390,14 @@ Acceptance tests:
 - the same forecast code works when components use different predictive
   distributions, provided all support the observed response.
 
-### Phase 6: S&P 500 Application Scripts
+### Phase 6: S&P 500 Application Scripts - Started
 
 Port examples as scripts, not config-fixed data sources.
 
 Suggested scripts:
 
 ```text
+scripts/run_febama_example.py
 scripts/run_febama_sp500.py
 scripts/compare_febama_algorithms.py
 scripts/prepare_febama_sp500_features.py
@@ -314,6 +426,19 @@ Acceptance tests:
 - output columns match the R comparison fixture shape;
 - no network dependency in tests.
 
+Implemented:
+
+- `scripts/run_febama_example.py` demonstrates a minimal rolling S&P 500
+  workflow with `tsfeatures`, `naive_fore`, `rw_drift_fore`, MAP fitting, and
+  held-out log-score comparison against equal weights.
+- `README.md` now introduces `gsm.febama` and the example command.
+
+Remaining:
+
+- full paper-style S&P 500 script with GARCH/EGARCH and Table 3 features.
+- feature-preparation script for `sp500_features_table3.csv`-style output.
+- comparison script against the R fast fixture shape.
+
 ## Dependency Policy
 
 Keep required dependencies minimal:
@@ -321,12 +446,15 @@ Keep required dependencies minimal:
 - current package requirements already include `jax`, `jaxlib`, `numpy`,
   `optax`, `scikit-learn`, and `scipy`;
 - use those for Phase 1 and Phase 2;
-- add optional extras later for time-series forecasters, for example:
+- optional FEBAMA dependencies are grouped under the `febama` extra:
 
 ```toml
 [project.optional-dependencies]
-febama = ["statsmodels"]
-febama-volatility = ["arch"]
+febama = [
+    "arch",
+    "statsforecast",
+    "tsfeatures",
+]
 ```
 
 Do not make network download or Yahoo Finance access part of tests.
@@ -351,10 +479,20 @@ Add Python-only tests for distribution selection:
 - distribution support is enforced, for example gamma/lognormal reject
   non-positive observations and discrete distributions reject fractional counts.
 
+Current Python FEBAMA tests:
+
+- `tests/test_febama_api.py`
+- `tests/test_febama_distributions.py`
+- `tests/test_febama_features.py`
+- `tests/test_febama_forecasters.py`
+- `tests/test_febama_inference.py`
+- `tests/test_febama_scoring.py`
+
 ## Risks and Decisions
 
-- Exact `tsfeatures` parity is expensive. Start with precomputed features and
-  implement only the features needed by the S&P 500 fast path.
+- Exact R `tsfeatures` parity is expensive. Python now uses the installed
+  `tsfeatures` package through a narrow adapter, but paper-level replication
+  still needs a column-by-column parity check against the R THA feature output.
 - R `forecast`, `rugarch`, `highfrequency`, and `stochvol` do not map one-to-one
   to Python. Keep these optional and separate from the core FEBAMA kernel.
 - Some distributions are only appropriate for certain response supports. The
@@ -366,17 +504,46 @@ Add Python-only tests for distribution selection:
 - The target should not copy fixed data paths from the R examples. Data paths
   belong in scripts and tests, not in config dataclasses.
 
-## First Implementation Slice
+## Completed Implementation Slice
 
-The smallest useful slice is:
+Completed:
 
-1. Create `gsm/febama/`.
-2. Implement `config.py`, `data.py`, `distributions.py`, and `scoring.py`.
-3. Add tests for distribution lookup, Gaussian scoring parity, logscore,
+1. Created `gsm/febama/`.
+2. Implemented `config.py`, `data.py`, `distributions.py`, and `scoring.py`.
+3. Added tests for distribution lookup, Gaussian scoring parity, logscore,
    weights, finite stability, and baseline component.
-4. Add `inference.py` with MAP first or direct VB if reusing `gsm.vi.engine` is
-   straightforward.
-5. Add `api.py` wrappers for precomputed `lpd` and features.
+4. Added `inference.py` with MAP fitting.
+5. Added `api.py` wrappers for precomputed `lpd` and features.
+6. Added `features.py` for feature cleaning, scaling, table loading, and
+   `tsfeatures` integration.
+7. Added `forecasters.py` for naive, drift, AutoETS/AutoARIMA, and
+   GARCH/EGARCH forecasters.
+8. Added `scripts/run_febama_example.py`.
 
-Only after this works should we port rolling feature construction and S&P 500
-application scripts.
+Recent verification:
+
+- `python -m py_compile` passed for the new FEBAMA feature files and example.
+- `python -m pytest tests/test_febama_features.py` passed.
+- Full package suite passed after adding FEBAMA features: `133 passed`.
+
+## Next Implementation Slice
+
+The next useful slice should make FEBAMA a complete forecasting workflow rather
+than a precomputed-LPD/MAP kernel:
+
+1. Add `compute_lpd_features(...)` as the shared rolling-origin builder.
+   - input: `SeriesData` or arrays;
+   - forecaster list;
+   - feature function or precomputed feature table;
+   - external `--data` paths only in scripts.
+2. Add `forecast.py` with recursive forecasting and metrics.
+   - update features through the forecast horizon;
+   - compute per-horizon weights;
+   - produce log score, MASE, and SMAPE.
+3. Add FEBAMA mean-field VB for gating coefficients.
+   - reuse the existing `gsm.vi.engine` pattern where possible;
+   - add posterior-sampled weights and predictive scores.
+4. Add the paper-style S&P 500 scripts.
+   - `run_febama_sp500.py`;
+   - `prepare_febama_sp500_features.py`;
+   - `compare_febama_algorithms.py`.

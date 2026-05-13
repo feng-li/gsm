@@ -49,12 +49,39 @@ comparison.
 - Optional ARD shrinkage for non-constant covariates.
 - Posterior-sampled held-out ELPD/LPDS for chronological train/test evaluation.
 
+## FEBAMA
+
+`gsm.febama` ports the R `febama` application layer for feature-based Bayesian
+forecast model averaging. FEBAMA is a density-forecast combination method: base
+forecasters produce predictive distributions, time-series features drive
+softmax model weights, and the fitted combination is scored by log predictive
+density.
+
+FEBAMA is kept separate from `gsm.models` because its expert distributions come
+from external forecasting models or precomputed predictive densities rather than
+from one GSM mixture kernel. The current Python slice includes:
+
+- JAX softmax-weight and log predictive score kernels.
+- A predictive-distribution registry for Gaussian, Student-t, split-normal,
+  split-t, lognormal, gamma, and Poisson forecasts.
+- Simple base forecasters: naive and random-walk-with-drift.
+- Optional `statsforecast` AutoETS/AutoARIMA and `arch` GARCH/EGARCH adapters.
+- `tsfeatures` integration, feature cleaning/scaling, and precomputed feature
+  table loading.
+- MAP fitting for FEBAMA gating coefficients.
+
 ## Installation
 
 From this directory:
 
 ```bash
 python -m pip install -e ".[dev]"
+```
+
+For FEBAMA examples with optional forecasters and `tsfeatures`, install:
+
+```bash
+python -m pip install -e ".[dev,febama]"
 ```
 
 The package requires Python 3.11 or newer. The editable install exposes the
@@ -109,6 +136,12 @@ python scripts/compare_count_models.py \
   --restarts 1
 ```
 
+Run the minimal FEBAMA example on the default S&P 500 return data:
+
+```bash
+python scripts/run_febama_example.py --max-origins 4 --test-size 1 --max-iter 100
+```
+
 Enable ARD shrinkage:
 
 ```bash
@@ -158,12 +191,22 @@ gsm/
     splitt.py               # split-t mixture log-density and predictions
     studentt.py             # symmetric Student-t mixture log-density and predictions
     weibull_survival.py     # Weibull interval-survival log-density
+  febama/
+    api.py                  # FEBAMA workflow wrappers for precomputed LPD/features
+    config.py               # FEBAMA configuration object
+    data.py                 # FEBAMA data containers
+    distributions.py        # predictive distribution registry
+    features.py             # tsfeatures adapter and feature cleaning/scaling
+    forecasters.py          # naive, drift, AutoETS/AutoARIMA, GARCH/EGARCH
+    inference.py            # MAP fitting for gating coefficients
+    scoring.py              # JAX softmax weights and log predictive score
 scripts/
   BetaReg_config.py         # default Rajan beta-regression specification
   Gaussian_config.py        # default S&P 500 Gaussian mixture specification
   compare_continuous_models.py
   compare_count_models.py      # mdvisits Poisson/NegBin comparison
   run_betareg_rajan.py      # Rajan BetaReg command-line runner
+  run_febama_example.py     # minimal FEBAMA command-line example
   run_gaussian_sp500.py     # command-line runner
 tests/
   test_*.py                 # focused migration tests
@@ -222,6 +265,30 @@ print(result.test_score.mean_elpd)
 `result.train_result.params` contains posterior means for compatibility with
 earlier code. `result.train_result.posterior` contains the fitted mean-field
 Gaussian posterior with coefficient means and log standard deviations.
+
+## FEBAMA Basic API
+
+For precomputed component log predictive densities and feature matrices:
+
+```python
+from gsm.febama import clean_features, fit_febama, prepare_lpd_features, score_febama
+
+lpd_features = prepare_lpd_features(
+    lpd,
+    features,
+    model_names=("naive", "rw_drift"),
+    feature_names=("x_acf1", "entropy"),
+)
+lpd_features = clean_features(lpd_features)
+fit = fit_febama(lpd_features, coefficient_prior_scale=10.0)
+score = score_febama(lpd_features, fit)
+
+print(score.total)
+```
+
+For live feature extraction, use `compute_tsfeatures(...)` or the example
+script `scripts/run_febama_example.py`. The script accepts `--data`, so data
+paths stay outside the FEBAMA config.
 
 ## Data
 
