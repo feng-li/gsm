@@ -1,0 +1,83 @@
+"""Feature-based Bayesian forecast model averaging utilities."""
+
+from gsm.febama.api import (
+    FebamaFit,
+    FebamaScore,
+    compute_weights,
+    fit_febama,
+    prepare_lpd_features,
+    score_febama,
+)
+from gsm.febama.config import FebamaConfig
+from gsm.febama.data import LpdFeatures, SeriesData
+from gsm.febama.distributions import (
+    PredictiveDistribution,
+    available_distributions,
+    get_distribution,
+    log_prob_from_prediction,
+    log_prob_matrix,
+    register_distribution,
+)
+from gsm.febama.forecasters import (
+    auto_arima_fore,
+    egarch_fore,
+    ets_fore,
+    garch_fore,
+    naive_fore,
+    rw_drift_fore,
+)
+from gsm.febama.features import (
+    SP500_TABLE3_FEATURES,
+    PrecomputedFeatureTable,
+    clean_features,
+    compute_tsfeatures,
+    read_precomputed_feature_table,
+    standardize_features,
+)
+from gsm.febama.inference import (
+    FebamaMapResult,
+    active_beta_vector,
+    fit_map,
+    log_posterior,
+    replace_active_beta,
+)
+from gsm.febama.scoring import linear_predictors, logscore, log_weights, responsibilities
+
+__all__ = [
+    "FebamaConfig",
+    "FebamaFit",
+    "FebamaMapResult",
+    "FebamaScore",
+    "LpdFeatures",
+    "PredictiveDistribution",
+    "PrecomputedFeatureTable",
+    "SP500_TABLE3_FEATURES",
+    "SeriesData",
+    "available_distributions",
+    "active_beta_vector",
+    "auto_arima_fore",
+    "clean_features",
+    "compute_tsfeatures",
+    "compute_weights",
+    "egarch_fore",
+    "ets_fore",
+    "fit_febama",
+    "fit_map",
+    "garch_fore",
+    "get_distribution",
+    "linear_predictors",
+    "log_prob_from_prediction",
+    "log_prob_matrix",
+    "log_posterior",
+    "logscore",
+    "log_weights",
+    "naive_fore",
+    "prepare_lpd_features",
+    "read_precomputed_feature_table",
+    "register_distribution",
+    "replace_active_beta",
+    "responsibilities",
+    "rw_drift_fore",
+    "score_febama",
+    "standardize_features",
+]

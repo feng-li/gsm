@@ -17,6 +17,11 @@ dev = [
     "pytest",
     "ruff",
 ]
+febama = [
+    "arch",
+    "statsforecast",
+    "tsfeatures",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
