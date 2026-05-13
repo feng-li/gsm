@@ -156,3 +156,30 @@ def optimize_restarts(
     if best_result is None:
         raise RuntimeError("no variational optimization runs were executed")
     return best_result
+
+
+def fit_mean_field_mixture_vb(
+    fit,
+    inputs,
+    initialize_variational_params: Callable[[], dict[str, dict[str, jnp.ndarray]]],
+    variational_elbo: Callable[..., jnp.ndarray],
+    coefficient_priors,
+    build_result: Callable[[dict[str, dict[str, jnp.ndarray]], np.ndarray, bool], Any],
+):
+    """Run the shared mean-field Gaussian VB optimization pattern."""
+
+    return optimize_restarts(
+        fit,
+        initialize_variational_params,
+        lambda noise_tree: lambda q: variational_elbo(
+            q,
+            inputs,
+            noise_tree,
+            coefficient_prior_scale=fit.coefficient_prior_scale,
+            use_ard=fit.use_ard,
+            ard_shape=fit.ard_shape,
+            ard_rate=fit.ard_rate,
+            coefficient_priors=coefficient_priors,
+        ),
+        build_result,
+    )
