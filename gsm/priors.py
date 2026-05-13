@@ -13,6 +13,7 @@ from scipy.special import betaln
 
 
 Shrinkage = float | str
+FeaturePriorSpec = tuple[str, str, int]
 
 
 @dataclass(frozen=True)
@@ -258,6 +259,23 @@ def build_gating_prior(
     return _complete_prior(mean, covariance, Z)
 
 
+def _build_feature_priors(
+    inputs: Any,
+    setting: Any,
+    specs: tuple[FeaturePriorSpec, ...],
+) -> dict[str, GaussianCoefficientPrior]:
+    priors: dict[str, GaussianCoefficientPrior] = {}
+    for prior_name, design_name, feature_index in specs:
+        priors[prior_name] = build_gaussian_coefficient_prior(
+            getattr(inputs, design_name),
+            setting.prior_mean_feat[feature_index],
+            setting.prior_std_feat[feature_index],
+            setting.link_types[feature_index],
+            setting.prior_shrink[feature_index],
+        )
+    return priors
+
+
 def build_gaussian_mixture_priors(
     inputs: Any,
     setting: Any,
@@ -354,21 +372,17 @@ def build_betareg_mixture_priors(
 ) -> BetaRegMixtureCoefficientPriors:
     """Build all coefficient priors needed by beta-regression mixture VB fits."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (
+            ("mean", "X_mean", 0),
+            ("dispersion", "X_dispersion", 1),
+        ),
+    )
     return BetaRegMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
-        dispersion=build_gaussian_coefficient_prior(
-            inputs.X_dispersion,
-            setting.prior_mean_feat[1],
-            setting.prior_std_feat[1],
-            setting.link_types[1],
-            setting.prior_shrink[1],
-        ),
+        mean=feature_priors["mean"],
+        dispersion=feature_priors["dispersion"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
@@ -383,14 +397,13 @@ def build_binomial_mixture_priors(
 ) -> BinomialMixtureCoefficientPriors:
     """Build all coefficient priors needed by binomial mixture VB fits."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (("mean", "X_mean", 0),),
+    )
     return BinomialMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
+        mean=feature_priors["mean"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
@@ -434,14 +447,13 @@ def build_poisson_mixture_priors(
 ) -> PoissonMixtureCoefficientPriors:
     """Build all coefficient priors needed by Poisson mixture VB fits."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (("mean", "X_mean", 0),),
+    )
     return PoissonMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
+        mean=feature_priors["mean"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
