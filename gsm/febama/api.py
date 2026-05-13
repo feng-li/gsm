@@ -8,7 +8,13 @@ import numpy as np
 from gsm.febama.data import LpdFeatures, SeriesData
 from gsm.febama.distributions import log_prob_matrix
 from gsm.febama.features import compute_tsfeatures
-from gsm.febama.inference import FebamaMapResult, fit_map
+from gsm.febama.inference import (
+    FebamaMapResult,
+    FebamaVbResult,
+    fit_map,
+    fit_vb,
+    sample_febama_beta_posterior,
+)
 from gsm.febama.scoring import add_intercept, logscore, log_weights
 
 
@@ -19,7 +25,8 @@ class FebamaFit:
     method: str
     beta: np.ndarray
     add_intercept: bool
-    result: FebamaMapResult
+    result: FebamaMapResult | FebamaVbResult
+    posterior: object | None = None
 
 
 @dataclass(frozen=True)
@@ -144,26 +151,51 @@ def fit_febama(
     active_mask=None,
     coefficient_prior_scale: float = 10.0,
     max_iter: int = 1000,
+    learning_rate: float = 1e-2,
+    tol: float = 1e-6,
+    n_elbo_samples: int = 8,
+    n_restarts: int = 1,
+    seed: int = 123,
+    posterior_init_log_std: float = -5.0,
 ) -> FebamaFit:
     """Fit FEBAMA gating coefficients for precomputed component log densities."""
 
     method = fit_method.lower()
-    if method != "map":
-        raise ValueError("only fit_method='map' is currently implemented")
     features = _features_for_model(lpd_features.features, add_intercept)
-    result = fit_map(
-        lpd_features.lpd,
-        features,
-        initial_beta=initial_beta,
-        active_mask=active_mask,
-        coefficient_prior_scale=coefficient_prior_scale,
-        max_iter=max_iter,
-    )
+    if method == "map":
+        result = fit_map(
+            lpd_features.lpd,
+            features,
+            initial_beta=initial_beta,
+            active_mask=active_mask,
+            coefficient_prior_scale=coefficient_prior_scale,
+            max_iter=max_iter,
+        )
+        posterior = None
+    elif method == "vb":
+        result = fit_vb(
+            lpd_features.lpd,
+            features,
+            initial_beta=initial_beta,
+            active_mask=active_mask,
+            coefficient_prior_scale=coefficient_prior_scale,
+            max_iter=max_iter,
+            learning_rate=learning_rate,
+            tol=tol,
+            n_elbo_samples=n_elbo_samples,
+            n_restarts=n_restarts,
+            seed=seed,
+            posterior_init_log_std=posterior_init_log_std,
+        )
+        posterior = result.posterior
+    else:
+        raise ValueError("fit_method must be 'map' or 'vb'")
     return FebamaFit(
         method=method,
         beta=result.beta,
         add_intercept=add_intercept,
         result=result,
+        posterior=posterior,
     )
 
 
@@ -172,6 +204,25 @@ def compute_weights(fit: FebamaFit, features) -> np.ndarray:
 
     matrix = _features_for_model(_raw_features(features), fit.add_intercept)
     return np.asarray(np.exp(log_weights(fit.beta, matrix)))
+
+
+def sample_weights(
+    fit: FebamaFit,
+    features,
+    n_samples: int = 100,
+    seed: int = 123,
+) -> np.ndarray:
+    """Return posterior-sampled FEBAMA weights for a fitted VB model."""
+
+    if fit.posterior is None:
+        raise ValueError("sample_weights requires a VB fit with a posterior")
+    matrix = _features_for_model(_raw_features(features), fit.add_intercept)
+    beta_samples = sample_febama_beta_posterior(
+        fit.posterior,
+        seed=seed,
+        n_samples=n_samples,
+    )
+    return np.asarray([np.exp(log_weights(beta, matrix)) for beta in beta_samples])
 
 
 def score_febama(lpd_features: LpdFeatures, fit: FebamaFit) -> FebamaScore:

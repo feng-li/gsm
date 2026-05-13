@@ -68,7 +68,8 @@ from one GSM mixture kernel. The current Python slice includes:
 - Optional `statsforecast` AutoETS/AutoARIMA and `arch` GARCH/EGARCH adapters.
 - `tsfeatures` integration, feature cleaning/scaling, and precomputed feature
   table loading.
-- MAP fitting for FEBAMA gating coefficients.
+- MAP and mean-field VB fitting for FEBAMA gating coefficients.
+- Posterior-sampled FEBAMA weights for VB fits.
 - One-step FEBAMA forecasting with log score, MASE, and SMAPE.
 
 ## Installation
@@ -287,6 +288,9 @@ score = score_febama(lpd_features, fit)
 
 print(score.total)
 ```
+
+Use `fit_febama(..., fit_method="vb")` and `sample_weights(...)` when posterior
+weight uncertainty is needed.
 
 For live rolling-origin LPD and feature construction, use
 `compute_lpd_features(...)`. The example script `scripts/run_febama_example.py`

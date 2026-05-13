@@ -259,12 +259,14 @@ Implemented:
 - Gaussian coefficient prior penalty.
 - active-mask packing/replacement behavior.
 - public `fit_febama(...)`, `compute_weights(...)`, and `score_febama(...)`.
+- mean-field Gaussian VB for FEBAMA gating coefficients.
+- public `fit_febama(..., fit_method="vb")`.
+- posterior-sampled FEBAMA weights through `sample_weights(...)`.
 - tests in `tests/test_febama_inference.py`.
+- VB workflow tests in `tests/test_febama_api.py`.
 
 Remaining:
 
-- mean-field Gaussian VB for FEBAMA gating coefficients.
-- posterior-sampled FEBAMA weights/scores.
 - optional ARD over gating-feature columns.
 
 ### Phase 3: Feature Cleaning and Precomputed Feature Mode - Done
@@ -404,7 +406,7 @@ Remaining:
 
 - recursive multi-step forecasting.
 - full `summarize_performance(...)` helper for lists of forecast results.
-- posterior-sampled forecast weights after FEBAMA VB exists.
+- posterior-sampled forecast weights inside `forecast_febama(...)`.
 
 ### Phase 6: S&P 500 Application Scripts - Started
 
@@ -537,12 +539,14 @@ Completed:
    GARCH/EGARCH forecasters.
 8. Added `scripts/run_febama_example.py`.
 9. Added one-step `forecast_febama(...)` and FEBAMA forecast metrics.
+10. Added FEBAMA mean-field VB and posterior-sampled weights.
 
 Recent verification:
 
 - `python -m py_compile` passed for the new FEBAMA feature files and example.
 - `python -m pytest tests/test_febama_features.py` passed.
 - Full package suite passed after adding FEBAMA features: `133 passed`.
+- FEBAMA test block passed after adding VB: `45 passed`.
 
 ## Next Implementation Slice
 
@@ -552,9 +556,7 @@ than a precomputed-LPD/MAP kernel:
 1. Extend `forecast.py` from one-step to recursive multi-step forecasting.
    - update features through the forecast horizon;
    - compute per-horizon weights.
-2. Add FEBAMA mean-field VB for gating coefficients.
-   - reuse the existing `gsm.vi.engine` pattern where possible;
-   - add posterior-sampled weights and predictive scores.
+2. Add posterior-sampled forecast weights/scores to `forecast_febama(...)`.
 3. Add the paper-style S&P 500 scripts.
    - `run_febama_sp500.py`;
    - `prepare_febama_sp500_features.py`;

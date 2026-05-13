@@ -7,6 +7,7 @@ from gsm.febama.api import (
     compute_weights,
     fit_febama,
     prepare_lpd_features,
+    sample_weights,
     score_febama,
 )
 from gsm.febama.config import FebamaConfig
@@ -38,10 +39,14 @@ from gsm.febama.features import (
 )
 from gsm.febama.inference import (
     FebamaMapResult,
+    FebamaVbPosterior,
+    FebamaVbResult,
     active_beta_vector,
     fit_map,
+    fit_vb,
     log_posterior,
     replace_active_beta,
+    sample_febama_beta_posterior,
 )
 from gsm.febama.scoring import linear_predictors, logscore, log_weights, responsibilities
 
@@ -51,6 +56,8 @@ __all__ = [
     "FebamaForecast",
     "FebamaMapResult",
     "FebamaScore",
+    "FebamaVbPosterior",
+    "FebamaVbResult",
     "LpdFeatures",
     "PredictiveDistribution",
     "PrecomputedFeatureTable",
@@ -67,6 +74,7 @@ __all__ = [
     "ets_fore",
     "fit_febama",
     "fit_map",
+    "fit_vb",
     "forecast_febama",
     "garch_fore",
     "get_distribution",
@@ -84,6 +92,8 @@ __all__ = [
     "replace_active_beta",
     "responsibilities",
     "rw_drift_fore",
+    "sample_febama_beta_posterior",
+    "sample_weights",
     "score_febama",
     "smape",
     "standardize_features",

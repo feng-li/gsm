@@ -5,8 +5,10 @@ import pytest
 from gsm.febama.inference import (
     active_beta_vector,
     fit_map,
+    fit_vb,
     log_posterior,
     replace_active_beta,
+    sample_febama_beta_posterior,
 )
 from gsm.febama.scoring import add_intercept
 
@@ -93,3 +95,57 @@ def test_febama_map_validates_shapes():
         fit_map(lpd, features, active_mask=np.ones((2, 2), dtype=bool))
     with pytest.raises(ValueError, match="same number of rows"):
         fit_map(lpd[:-1], features)
+
+
+def test_febama_vb_returns_finite_posterior_and_history():
+    lpd, features = _training_data()
+
+    result = fit_vb(
+        lpd,
+        features,
+        coefficient_prior_scale=100.0,
+        max_iter=40,
+        learning_rate=0.05,
+        n_elbo_samples=4,
+        seed=321,
+    )
+
+    assert result.success
+    assert result.beta.shape == (1, 2)
+    assert result.posterior.mean.shape == (1, 2)
+    assert result.posterior.log_std.shape == (1, 2)
+    assert result.active_mask.shape == (1, 2)
+    assert result.elbo_history.shape[0] >= 1
+    assert np.isfinite(result.elbo_history).all()
+    assert np.isfinite(result.posterior.mean).all()
+    assert np.isfinite(result.posterior.log_std).all()
+
+
+def test_febama_vb_respects_active_mask_and_samples_coefficients():
+    lpd, features = _training_data()
+    active_mask = np.asarray([[False, True]])
+
+    result = fit_vb(
+        lpd,
+        features,
+        active_mask=active_mask,
+        coefficient_prior_scale=100.0,
+        max_iter=20,
+        learning_rate=0.05,
+        n_elbo_samples=3,
+        seed=123,
+    )
+    samples = sample_febama_beta_posterior(result.posterior, seed=123, n_samples=5)
+
+    assert result.beta[0, 0] == 0.0
+    assert samples.shape == (5, 1, 2)
+    np.testing.assert_allclose(samples[:, 0, 0], np.zeros(5))
+    assert np.isfinite(samples).all()
+
+
+def test_febama_vb_validates_sampling_count():
+    lpd, features = _training_data()
+    result = fit_vb(lpd, features, max_iter=5, n_elbo_samples=2)
+
+    with pytest.raises(ValueError, match="n_samples must be positive"):
+        sample_febama_beta_posterior(result.posterior, n_samples=0)

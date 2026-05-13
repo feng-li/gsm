@@ -9,6 +9,7 @@ from gsm.febama import (
     naive_fore,
     prepare_lpd_features,
     rw_drift_fore,
+    sample_weights,
     score_febama,
 )
 from gsm.febama.scoring import add_intercept, logscore
@@ -60,8 +61,8 @@ def test_febama_public_fit_can_skip_intercept():
 def test_febama_public_api_rejects_unknown_fit_method():
     lpd_features = _workflow_data()
 
-    with pytest.raises(ValueError, match="only fit_method='map'"):
-        fit_febama(lpd_features, fit_method="vb")
+    with pytest.raises(ValueError, match="fit_method"):
+        fit_febama(lpd_features, fit_method="sgld")
 
 
 def test_febama_prepare_lpd_features_validates_shapes():
@@ -75,6 +76,36 @@ def test_febama_compute_weights_validates_feature_shape():
 
     with pytest.raises(ValueError, match="features must be a 2D matrix"):
         compute_weights(fit, np.ones(3))
+
+
+def test_febama_public_vb_workflow_samples_weights():
+    lpd_features = _workflow_data()
+
+    fit = fit_febama(
+        lpd_features,
+        fit_method="vb",
+        coefficient_prior_scale=100.0,
+        max_iter=30,
+        learning_rate=0.05,
+        n_elbo_samples=4,
+        seed=123,
+    )
+    weights = sample_weights(fit, lpd_features, n_samples=3, seed=123)
+
+    assert fit.method == "vb"
+    assert fit.posterior is not None
+    assert fit.result.elbo_history.shape[0] >= 1
+    assert weights.shape == (3, lpd_features.lpd.shape[0], lpd_features.lpd.shape[1])
+    np.testing.assert_allclose(weights.sum(axis=2), np.ones(weights.shape[:2]))
+    assert np.isfinite(weights).all()
+
+
+def test_febama_sample_weights_requires_vb_fit():
+    lpd_features = _workflow_data()
+    fit = fit_febama(lpd_features, coefficient_prior_scale=100.0)
+
+    with pytest.raises(ValueError, match="VB fit"):
+        sample_weights(fit, lpd_features, n_samples=2)
 
 
 def test_febama_compute_lpd_features_builds_rolling_training_data():

@@ -1,13 +1,19 @@
-"""MAP inference for FEBAMA softmax gating coefficients."""
+"""MAP and VB inference for FEBAMA softmax gating coefficients."""
 
 from dataclasses import dataclass
 
+import jax
 import jax.numpy as jnp
 from jax import value_and_grad
 import numpy as np
 from scipy.optimize import minimize
 
 from gsm.febama.scoring import logscore
+from gsm.vi.engine import (
+    initialize_mean_field_variational_params,
+    monte_carlo_variational_elbo,
+    optimize_restarts,
+)
 
 
 @dataclass(frozen=True)
@@ -21,6 +27,40 @@ class FebamaMapResult:
     success: bool
     message: str
     n_iter: int
+
+
+@dataclass(frozen=True)
+class FebamaVbPosterior:
+    """Mean-field Gaussian posterior over FEBAMA gating coefficients."""
+
+    mean: np.ndarray
+    log_std: np.ndarray
+    active_mask: np.ndarray
+
+
+@dataclass(frozen=True)
+class FebamaVbResult:
+    """Result from mean-field VB fitting of FEBAMA gating coefficients."""
+
+    beta: np.ndarray
+    posterior: FebamaVbPosterior
+    active_mask: np.ndarray
+    elbo_history: np.ndarray
+    converged: bool
+    objective: float
+    success: bool
+    message: str
+    n_iter: int
+
+
+@dataclass(frozen=True)
+class _FebamaVbFitOptions:
+    max_iter: int
+    learning_rate: float
+    tol: float
+    n_elbo_samples: int
+    n_restarts: int
+    seed: int
 
 
 def fit_map(
@@ -85,6 +125,140 @@ def fit_map(
         success=bool(opt.success),
         message=str(opt.message),
         n_iter=int(opt.nit),
+    )
+
+
+def fit_vb(
+    lpd,
+    features,
+    initial_beta=None,
+    active_mask=None,
+    coefficient_prior_scale: float = 10.0,
+    max_iter: int = 1000,
+    learning_rate: float = 1e-2,
+    tol: float = 1e-6,
+    n_elbo_samples: int = 8,
+    n_restarts: int = 1,
+    seed: int = 123,
+    posterior_init_log_std: float = -5.0,
+) -> FebamaVbResult:
+    """Fit FEBAMA gating coefficients with a mean-field Gaussian posterior."""
+
+    lpd_array, features_array = _validate_training_arrays(lpd, features)
+    beta0 = _initial_beta(lpd_array, features_array, initial_beta)
+    mask = _active_mask(beta0, active_mask)
+    beta0 = np.where(mask, beta0, 0.0)
+    active0 = active_beta_vector(beta0, mask)
+    template = np.zeros_like(beta0)
+    active_indices = jnp.asarray(np.flatnonzero(mask.ravel()), dtype=jnp.int32)
+
+    if active0.size == 0:
+        posterior = FebamaVbPosterior(
+            mean=beta0,
+            log_std=np.zeros_like(beta0),
+            active_mask=mask,
+        )
+        objective = float(log_posterior(lpd_array, features_array, beta0, coefficient_prior_scale))
+        return FebamaVbResult(
+            beta=beta0,
+            posterior=posterior,
+            active_mask=mask,
+            elbo_history=np.asarray([objective]),
+            converged=True,
+            objective=objective,
+            success=True,
+            message="no active coefficients",
+            n_iter=0,
+        )
+
+    fit_options = _FebamaVbFitOptions(
+        max_iter=int(max_iter),
+        learning_rate=float(learning_rate),
+        tol=float(tol),
+        n_elbo_samples=int(n_elbo_samples),
+        n_restarts=int(n_restarts),
+        seed=int(seed),
+    )
+
+    def initialize_variational_params():
+        mean_tree = {"active_beta": jnp.asarray(active0)}
+        return initialize_mean_field_variational_params(mean_tree, posterior_init_log_std)
+
+    def objective_for_noise(noise_tree):
+        def objective(variational_tree):
+            return monte_carlo_variational_elbo(
+                variational_tree,
+                noise_tree,
+                lambda sample_tree: _active_log_posterior(
+                    sample_tree["active_beta"],
+                    lpd_array,
+                    features_array,
+                    template,
+                    active_indices,
+                    coefficient_prior_scale,
+                ),
+            )
+
+        return objective
+
+    def build_result(variational_tree, history, converged):
+        mean_active = np.asarray(variational_tree["mean"]["active_beta"], dtype=float)
+        log_std_active = np.asarray(variational_tree["log_std"]["active_beta"], dtype=float)
+        beta_mean = replace_active_beta(template, mask, mean_active)
+        log_std = replace_active_beta(template, mask, log_std_active)
+        posterior = FebamaVbPosterior(
+            mean=beta_mean,
+            log_std=log_std,
+            active_mask=mask,
+        )
+        history = np.asarray(history, dtype=float)
+        finite = bool(np.all(np.isfinite(history)))
+        return FebamaVbResult(
+            beta=beta_mean,
+            posterior=posterior,
+            active_mask=mask,
+            elbo_history=history,
+            converged=bool(converged),
+            objective=float(history[-1]),
+            success=finite,
+            message="converged" if converged else "maximum iterations reached",
+            n_iter=int(history.shape[0]),
+        )
+
+    return optimize_restarts(
+        fit_options,
+        initialize_variational_params,
+        objective_for_noise,
+        build_result,
+    )
+
+
+def sample_febama_beta_posterior(
+    posterior: FebamaVbPosterior,
+    seed: int = 123,
+    n_samples: int = 100,
+) -> np.ndarray:
+    """Draw full FEBAMA coefficient matrices from a fitted VB posterior."""
+
+    n_samples = int(n_samples)
+    if n_samples < 1:
+        raise ValueError("n_samples must be positive")
+    mean = np.asarray(posterior.mean, dtype=float)
+    log_std = np.asarray(posterior.log_std, dtype=float)
+    mask = _active_mask(mean, posterior.active_mask)
+    active_mean = mean[mask]
+    if active_mean.size == 0:
+        return np.repeat(mean[None, :, :], n_samples, axis=0)
+    active_log_std = log_std[mask]
+    noise = jax.random.normal(
+        jax.random.PRNGKey(int(seed)),
+        (n_samples, active_mean.size),
+        dtype=jnp.asarray(active_mean).dtype,
+    )
+    active_samples = active_mean + np.exp(active_log_std) * np.asarray(noise)
+    template = np.zeros_like(mean)
+    return np.asarray(
+        [replace_active_beta(template, mask, active_samples[idx]) for idx in range(n_samples)]
     )
 
 
