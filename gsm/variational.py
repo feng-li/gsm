@@ -24,6 +24,7 @@ from .config import (
     StudentTMixtureSetting,
 )
 from .data import Dataset
+from .model_registry import get_model_adapter
 from .vi.common import VariationalResult
 from .vi.betareg import (
     BetaRegMixtureInputs,
@@ -231,28 +232,4 @@ def fit_variational(
 ) -> VariationalResult:
     """Dispatch to the available variational inference implementation."""
 
-    if isinstance(model, BetaRegMixtureSetting):
-        return fit_betareg_mixture_vb(dataset, model, fit)
-    if isinstance(model, BetaBinMixtureSetting):
-        return fit_betabin_mixture_vb(dataset, model, fit)
-    if isinstance(model, BinomialMixtureSetting):
-        return fit_binomial_mixture_vb(dataset, model, fit)
-    if isinstance(model, (GammaMixtureSetting, GammaRepMixtureSetting)):
-        return fit_gamma_mixture_vb(dataset, model, fit)
-    if isinstance(model, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
-        return fit_genpoisson_mixture_vb(dataset, model, fit)
-    if isinstance(model, GaussianMixtureSetting):
-        return fit_gaussian_mixture_vb(dataset, model, fit)
-    if isinstance(model, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
-        return fit_lognormal_mixture_vb(dataset, model, fit)
-    if isinstance(model, NegBinMixtureSetting):
-        return fit_negbin_mixture_vb(dataset, model, fit)
-    if isinstance(model, PoissonMixtureSetting):
-        return fit_poisson_mixture_vb(dataset, model, fit)
-    if isinstance(model, SplitNormalMixtureSetting):
-        return fit_splitnormal_mixture_vb(dataset, model, fit)
-    if isinstance(model, SplitTMixtureSetting):
-        return fit_splitt_mixture_vb(dataset, model, fit)
-    if isinstance(model, StudentTMixtureSetting):
-        return fit_studentt_mixture_vb(dataset, model, fit)
-    raise NotImplementedError(f"no variational implementation for model type {type(model)!r}")
+    return get_model_adapter(model).fit_vb(dataset, model, fit)

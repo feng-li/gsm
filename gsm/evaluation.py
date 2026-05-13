@@ -3,139 +3,14 @@
 from dataclasses import dataclass
 from typing import Any
 
-import jax.numpy as jnp
 from jax import vmap
 from jax.nn import logsumexp
 import numpy as np
 
-from .config import (
-    BetaBinMixtureSetting,
-    BetaRegMixtureSetting,
-    BinomialMixtureSetting,
-    FitConfig,
-    GammaMixtureSetting,
-    GammaRepMixtureSetting,
-    GenPoissonAltMixtureSetting,
-    GenPoissonMixtureSetting,
-    GaussianMixtureSetting,
-    LogNormalMixtureSetting,
-    LogNormalRepMixtureSetting,
-    NegBinMixtureSetting,
-    PoissonMixtureSetting,
-    SplitNormalMixtureSetting,
-    SplitTMixtureSetting,
-    StudentTMixtureSetting,
-)
+from .config import FitConfig, GaussianMixtureSetting
 from .data import Dataset, subset_dataset
-from .models.betabinomial import log_prob_observations as betabin_log_prob_observations
-from .models.betareg import log_prob_observations as betareg_log_prob_observations
-from .models.binomial import log_prob_observations as binomial_log_prob_observations
-from .models.gamma import log_prob_observations as gamma_log_prob_observations
-from .models.genpoisson import log_prob_observations as genpoisson_log_prob_observations
-from .models.gaussian import log_prob_observations as gaussian_log_prob_observations
-from .models.lognormal import log_prob_observations as lognormal_log_prob_observations
-from .models.negbin import log_prob_observations as negbin_log_prob_observations
-from .models.poisson import log_prob_observations as poisson_log_prob_observations
-from .models.splitnormal import log_prob_observations as splitnormal_log_prob_observations
-from .models.splitt import log_prob_observations as splitt_log_prob_observations
-from .models.studentt import log_prob_observations as studentt_log_prob_observations
-from .variational import (
-    BetaBinMixtureStandardization,
-    BetaRegMixtureStandardization,
-    BinomialMixtureStandardization,
-    GammaMixtureStandardization,
-    GenPoissonMixtureStandardization,
-    GaussianMixtureStandardization,
-    LogNormalMixtureStandardization,
-    NegBinMixtureStandardization,
-    PoissonMixtureStandardization,
-    SplitNormalMixtureStandardization,
-    SplitTMixtureStandardization,
-    StudentTMixtureStandardization,
-    VariationalResult,
-    fit_betabin_mixture_standardization,
-    fit_betareg_mixture_standardization,
-    fit_binomial_mixture_standardization,
-    fit_gamma_mixture_standardization,
-    fit_genpoisson_mixture_standardization,
-    fit_gaussian_mixture_standardization,
-    fit_lognormal_mixture_standardization,
-    fit_negbin_mixture_standardization,
-    fit_poisson_mixture_standardization,
-    fit_splitnormal_mixture_standardization,
-    fit_splitt_mixture_standardization,
-    fit_studentt_mixture_standardization,
-    fit_variational,
-    prepare_betabin_mixture_inputs,
-    prepare_betareg_mixture_inputs,
-    prepare_binomial_mixture_inputs,
-    prepare_gamma_mixture_inputs,
-    prepare_genpoisson_mixture_inputs,
-    prepare_gaussian_mixture_inputs,
-    prepare_lognormal_mixture_inputs,
-    prepare_negbin_mixture_inputs,
-    prepare_poisson_mixture_inputs,
-    prepare_splitnormal_mixture_inputs,
-    prepare_splitt_mixture_inputs,
-    prepare_studentt_mixture_inputs,
-    sample_betabin_mixture_posterior,
-    sample_betareg_mixture_posterior,
-    sample_binomial_mixture_posterior,
-    sample_gamma_mixture_posterior,
-    sample_genpoisson_mixture_posterior,
-    sample_gaussian_mixture_posterior,
-    sample_lognormal_mixture_posterior,
-    sample_negbin_mixture_posterior,
-    sample_poisson_mixture_posterior,
-    sample_splitnormal_mixture_posterior,
-    sample_splitt_mixture_posterior,
-    sample_studentt_mixture_posterior,
-    tree_to_betabin_params,
-    tree_to_betareg_params,
-    tree_to_binomial_params,
-    tree_to_gamma_params,
-    tree_to_genpoisson_params,
-    tree_to_gaussian_params,
-    tree_to_lognormal_params,
-    tree_to_negbin_params,
-    tree_to_poisson_params,
-    tree_to_splitnormal_params,
-    tree_to_splitt_params,
-    tree_to_studentt_params,
-)
-
-
-ModelSetting = (
-    BetaBinMixtureSetting
-    | BetaRegMixtureSetting
-    | BinomialMixtureSetting
-    | GammaMixtureSetting
-    | GammaRepMixtureSetting
-    | GenPoissonAltMixtureSetting
-    | GenPoissonMixtureSetting
-    | GaussianMixtureSetting
-    | LogNormalMixtureSetting
-    | LogNormalRepMixtureSetting
-    | NegBinMixtureSetting
-    | PoissonMixtureSetting
-    | SplitNormalMixtureSetting
-    | SplitTMixtureSetting
-    | StudentTMixtureSetting
-)
-ModelStandardization = (
-    BetaBinMixtureStandardization
-    | BetaRegMixtureStandardization
-    | BinomialMixtureStandardization
-    | GammaMixtureStandardization
-    | GenPoissonMixtureStandardization
-    | GaussianMixtureStandardization
-    | LogNormalMixtureStandardization
-    | NegBinMixtureStandardization
-    | PoissonMixtureStandardization
-    | SplitNormalMixtureStandardization
-    | SplitTMixtureStandardization
-    | StudentTMixtureStandardization
-)
+from .model_registry import ModelSetting, ModelStandardization, get_model_adapter
+from .variational import VariationalResult, fit_variational
 
 
 @dataclass(frozen=True)
@@ -269,31 +144,7 @@ def _fit_model_standardization(
     dataset: Dataset,
     setting: ModelSetting,
 ) -> ModelStandardization:
-    if isinstance(setting, BetaBinMixtureSetting):
-        return fit_betabin_mixture_standardization(dataset, setting)
-    if isinstance(setting, BetaRegMixtureSetting):
-        return fit_betareg_mixture_standardization(dataset, setting)
-    if isinstance(setting, BinomialMixtureSetting):
-        return fit_binomial_mixture_standardization(dataset, setting)
-    if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
-        return fit_gamma_mixture_standardization(dataset, setting)
-    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
-        return fit_genpoisson_mixture_standardization(dataset, setting)
-    if isinstance(setting, GaussianMixtureSetting):
-        return fit_gaussian_mixture_standardization(dataset, setting)
-    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
-        return fit_lognormal_mixture_standardization(dataset, setting)
-    if isinstance(setting, NegBinMixtureSetting):
-        return fit_negbin_mixture_standardization(dataset, setting)
-    if isinstance(setting, PoissonMixtureSetting):
-        return fit_poisson_mixture_standardization(dataset, setting)
-    if isinstance(setting, SplitNormalMixtureSetting):
-        return fit_splitnormal_mixture_standardization(dataset, setting)
-    if isinstance(setting, SplitTMixtureSetting):
-        return fit_splitt_mixture_standardization(dataset, setting)
-    if isinstance(setting, StudentTMixtureSetting):
-        return fit_studentt_mixture_standardization(dataset, setting)
-    raise NotImplementedError(f"no standardization for model type {type(setting)!r}")
+    return get_model_adapter(setting).fit_standardization(dataset, setting)
 
 
 def _prepare_model_inputs(
@@ -301,192 +152,19 @@ def _prepare_model_inputs(
     setting: ModelSetting,
     standardization: ModelStandardization | None,
 ) -> Any:
-    if isinstance(setting, BetaBinMixtureSetting):
-        return prepare_betabin_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, BetaRegMixtureSetting):
-        return prepare_betareg_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, BinomialMixtureSetting):
-        return prepare_binomial_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
-        return prepare_gamma_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
-        return prepare_genpoisson_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, GaussianMixtureSetting):
-        return prepare_gaussian_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
-        return prepare_lognormal_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, NegBinMixtureSetting):
-        return prepare_negbin_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, PoissonMixtureSetting):
-        return prepare_poisson_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, SplitNormalMixtureSetting):
-        return prepare_splitnormal_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, SplitTMixtureSetting):
-        return prepare_splitt_mixture_inputs(dataset, setting, standardization)
-    if isinstance(setting, StudentTMixtureSetting):
-        return prepare_studentt_mixture_inputs(dataset, setting, standardization)
-    raise NotImplementedError(f"no input builder for model type {type(setting)!r}")
+    return get_model_adapter(setting).prepare_inputs(dataset, setting, standardization)
 
 
 def _sample_model_posterior(posterior, setting: ModelSetting, seed: int, n_samples: int):
-    if isinstance(setting, BetaBinMixtureSetting):
-        return sample_betabin_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, BetaRegMixtureSetting):
-        return sample_betareg_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, BinomialMixtureSetting):
-        return sample_binomial_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
-        return sample_gamma_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
-        return sample_genpoisson_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, GaussianMixtureSetting):
-        return sample_gaussian_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
-        return sample_lognormal_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, NegBinMixtureSetting):
-        return sample_negbin_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, PoissonMixtureSetting):
-        return sample_poisson_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, SplitNormalMixtureSetting):
-        return sample_splitnormal_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, SplitTMixtureSetting):
-        return sample_splitt_mixture_posterior(posterior, seed, n_samples)
-    if isinstance(setting, StudentTMixtureSetting):
-        return sample_studentt_mixture_posterior(posterior, seed, n_samples)
-    raise NotImplementedError(f"no posterior sampler for model type {type(setting)!r}")
+    return get_model_adapter(setting).sample_posterior(posterior, seed, n_samples)
 
 
 def _tree_to_model_params(sample_tree, setting: ModelSetting):
-    if isinstance(setting, BetaBinMixtureSetting):
-        return tree_to_betabin_params(sample_tree)
-    if isinstance(setting, BetaRegMixtureSetting):
-        return tree_to_betareg_params(sample_tree)
-    if isinstance(setting, BinomialMixtureSetting):
-        return tree_to_binomial_params(sample_tree)
-    if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
-        return tree_to_gamma_params(sample_tree)
-    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
-        return tree_to_genpoisson_params(sample_tree)
-    if isinstance(setting, GaussianMixtureSetting):
-        return tree_to_gaussian_params(sample_tree)
-    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
-        return tree_to_lognormal_params(sample_tree)
-    if isinstance(setting, NegBinMixtureSetting):
-        return tree_to_negbin_params(sample_tree)
-    if isinstance(setting, PoissonMixtureSetting):
-        return tree_to_poisson_params(sample_tree)
-    if isinstance(setting, SplitNormalMixtureSetting):
-        return tree_to_splitnormal_params(sample_tree)
-    if isinstance(setting, SplitTMixtureSetting):
-        return tree_to_splitt_params(sample_tree)
-    if isinstance(setting, StudentTMixtureSetting):
-        return tree_to_studentt_params(sample_tree)
-    raise NotImplementedError(f"no tree conversion for model type {type(setting)!r}")
+    return get_model_adapter(setting).tree_to_params(sample_tree)
 
 
 def _pointwise_log_prob(params, inputs, setting: ModelSetting):
-    if isinstance(setting, BetaBinMixtureSetting):
-        return betabin_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_dispersion),
-            jnp.asarray(inputs.Z),
-        )
-    if isinstance(setting, BetaRegMixtureSetting):
-        return betareg_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_dispersion),
-            jnp.asarray(inputs.Z),
-        )
-    if isinstance(setting, BinomialMixtureSetting):
-        return binomial_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.Z),
-        )
-    if isinstance(setting, (GammaMixtureSetting, GammaRepMixtureSetting)):
-        return gamma_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_variance),
-            jnp.asarray(inputs.Z),
-            parameterization=setting.parameterization,
-        )
-    if isinstance(setting, (GenPoissonMixtureSetting, GenPoissonAltMixtureSetting)):
-        return genpoisson_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_dispersion),
-            jnp.asarray(inputs.Z),
-            parameterization=setting.parameterization,
-        )
-    if isinstance(setting, GaussianMixtureSetting):
-        return gaussian_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_variance),
-            jnp.asarray(inputs.Z),
-        )
-    if isinstance(setting, (LogNormalMixtureSetting, LogNormalRepMixtureSetting)):
-        return lognormal_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_scale),
-            jnp.asarray(inputs.Z),
-            parameterization=setting.parameterization,
-        )
-    if isinstance(setting, NegBinMixtureSetting):
-        return negbin_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_dispersion),
-            jnp.asarray(inputs.Z),
-        )
-    if isinstance(setting, PoissonMixtureSetting):
-        return poisson_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.Z),
-        )
-    if isinstance(setting, SplitNormalMixtureSetting):
-        return splitnormal_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_scale),
-            jnp.asarray(inputs.X_skewness),
-            jnp.asarray(inputs.Z),
-        )
-    if isinstance(setting, SplitTMixtureSetting):
-        return splitt_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_df),
-            jnp.asarray(inputs.X_scale),
-            jnp.asarray(inputs.X_skewness),
-            jnp.asarray(inputs.Z),
-        )
-    if isinstance(setting, StudentTMixtureSetting):
-        return studentt_log_prob_observations(
-            params,
-            jnp.asarray(inputs.y),
-            jnp.asarray(inputs.X_mean),
-            jnp.asarray(inputs.X_df),
-            jnp.asarray(inputs.X_scale),
-            jnp.asarray(inputs.Z),
-        )
-    raise NotImplementedError(f"no pointwise log probability for model type {type(setting)!r}")
+    return get_model_adapter(setting).pointwise_log_prob(params, inputs, setting)
 
 
 def chronological_holdout_indices(
