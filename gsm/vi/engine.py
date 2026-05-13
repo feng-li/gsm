@@ -165,6 +165,7 @@ def fit_mean_field_mixture_vb(
     variational_elbo: Callable[..., jnp.ndarray],
     coefficient_priors,
     build_result: Callable[[dict[str, dict[str, jnp.ndarray]], np.ndarray, bool], Any],
+    extra_args: tuple[Any, ...] = (),
 ):
     """Run the shared mean-field Gaussian VB optimization pattern."""
 
@@ -174,6 +175,7 @@ def fit_mean_field_mixture_vb(
         lambda noise_tree: lambda q: variational_elbo(
             q,
             inputs,
+            *extra_args,
             noise_tree,
             coefficient_prior_scale=fit.coefficient_prior_scale,
             use_ard=fit.use_ard,

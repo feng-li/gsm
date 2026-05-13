@@ -25,9 +25,9 @@ from gsm.vi.common import (
     validate_binomial_response,
 )
 from gsm.vi.engine import (
+    fit_mean_field_mixture_vb,
     initialize_mean_field_variational_params,
     monte_carlo_variational_elbo,
-    optimize_restarts,
     sample_posterior_tree,
 )
 
@@ -250,24 +250,17 @@ def fit_betabin_mixture_vb(
     fit = fit or FitConfig()
     inputs = prepare_betabin_mixture_inputs(dataset, setting)
     coefficient_priors = build_betabin_mixture_priors(inputs, setting)
-    return optimize_restarts(
-        fit,
-        lambda: initialize_betabin_mixture_variational_params(
+    return fit_mean_field_mixture_vb(
+        fit=fit,
+        inputs=inputs,
+        initialize_variational_params=lambda: initialize_betabin_mixture_variational_params(
             inputs,
             setting,
             init_log_std=fit.posterior_init_log_std,
         ),
-        lambda noise_tree: lambda q: betabin_mixture_variational_elbo(
-            q,
-            inputs,
-            noise_tree,
-            coefficient_prior_scale=fit.coefficient_prior_scale,
-            use_ard=fit.use_ard,
-            ard_shape=fit.ard_shape,
-            ard_rate=fit.ard_rate,
-            coefficient_priors=coefficient_priors,
-        ),
-        lambda variational_params, history, converged: _build_betabin_variational_result(
+        variational_elbo=betabin_mixture_variational_elbo,
+        coefficient_priors=coefficient_priors,
+        build_result=lambda variational_params, history, converged: _build_betabin_variational_result(
             variational_params, inputs, history, converged
         ),
     )
