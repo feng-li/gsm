@@ -314,21 +314,17 @@ def build_lognormal_mixture_priors(
 ) -> LogNormalMixtureCoefficientPriors:
     """Build all coefficient priors needed by lognormal mixture VB fits."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (
+            ("mean", "X_mean", 0),
+            ("scale", "X_scale", 1),
+        ),
+    )
     return LogNormalMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
-        scale=build_gaussian_coefficient_prior(
-            inputs.X_scale,
-            setting.prior_mean_feat[1],
-            setting.prior_std_feat[1],
-            setting.link_types[1],
-            setting.prior_shrink[1],
-        ),
+        mean=feature_priors["mean"],
+        scale=feature_priors["scale"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
@@ -343,21 +339,17 @@ def build_gamma_mixture_priors(
 ) -> GammaMixtureCoefficientPriors:
     """Build all coefficient priors needed by gamma mixture VB fits."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (
+            ("mean", "X_mean", 0),
+            ("variance", "X_variance", 1),
+        ),
+    )
     return GammaMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
-        variance=build_gaussian_coefficient_prior(
-            inputs.X_variance,
-            setting.prior_mean_feat[1],
-            setting.prior_std_feat[1],
-            setting.link_types[1],
-            setting.prior_shrink[1],
-        ),
+        mean=feature_priors["mean"],
+        variance=feature_priors["variance"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
@@ -418,21 +410,17 @@ def build_betabin_mixture_priors(
 ) -> BetaBinMixtureCoefficientPriors:
     """Build all coefficient priors needed by beta-binomial mixture VB fits."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (
+            ("mean", "X_mean", 0),
+            ("dispersion", "X_dispersion", 1),
+        ),
+    )
     return BetaBinMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
-        dispersion=build_gaussian_coefficient_prior(
-            inputs.X_dispersion,
-            setting.prior_mean_feat[1],
-            setting.prior_std_feat[1],
-            setting.link_types[1],
-            setting.prior_shrink[1],
-        ),
+        mean=feature_priors["mean"],
+        dispersion=feature_priors["dispersion"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
@@ -468,21 +456,17 @@ def build_negbin_mixture_priors(
 ) -> NegBinMixtureCoefficientPriors:
     """Build all coefficient priors needed by negative-binomial mixture VB fits."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (
+            ("mean", "X_mean", 0),
+            ("dispersion", "X_dispersion", 1),
+        ),
+    )
     return NegBinMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
-        dispersion=build_gaussian_coefficient_prior(
-            inputs.X_dispersion,
-            setting.prior_mean_feat[1],
-            setting.prior_std_feat[1],
-            setting.link_types[1],
-            setting.prior_shrink[1],
-        ),
+        mean=feature_priors["mean"],
+        dispersion=feature_priors["dispersion"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
@@ -497,21 +481,17 @@ def build_genpoisson_mixture_priors(
 ) -> GenPoissonMixtureCoefficientPriors:
     """Build all coefficient priors needed by generalized Poisson VB fits."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (
+            ("mean", "X_mean", 0),
+            ("dispersion", "X_dispersion", 1),
+        ),
+    )
     return GenPoissonMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
-        dispersion=build_gaussian_coefficient_prior(
-            inputs.X_dispersion,
-            setting.prior_mean_feat[1],
-            setting.prior_std_feat[1],
-            setting.link_types[1],
-            setting.prior_shrink[1],
-        ),
+        mean=feature_priors["mean"],
+        dispersion=feature_priors["dispersion"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
@@ -526,35 +506,21 @@ def build_splitt_mixture_priors(
 ) -> SplitTMixtureCoefficientPriors:
     """Build all coefficient priors needed by ``fit_splitt_mixture_vb``."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (
+            ("mean", "X_mean", 0),
+            ("df", "X_df", 1),
+            ("scale", "X_scale", 2),
+            ("skewness", "X_skewness", 3),
+        ),
+    )
     return SplitTMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
-        df=build_gaussian_coefficient_prior(
-            inputs.X_df,
-            setting.prior_mean_feat[1],
-            setting.prior_std_feat[1],
-            setting.link_types[1],
-            setting.prior_shrink[1],
-        ),
-        scale=build_gaussian_coefficient_prior(
-            inputs.X_scale,
-            setting.prior_mean_feat[2],
-            setting.prior_std_feat[2],
-            setting.link_types[2],
-            setting.prior_shrink[2],
-        ),
-        skewness=build_gaussian_coefficient_prior(
-            inputs.X_skewness,
-            setting.prior_mean_feat[3],
-            setting.prior_std_feat[3],
-            setting.link_types[3],
-            setting.prior_shrink[3],
-        ),
+        mean=feature_priors["mean"],
+        df=feature_priors["df"],
+        scale=feature_priors["scale"],
+        skewness=feature_priors["skewness"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
@@ -569,28 +535,19 @@ def build_studentt_mixture_priors(
 ) -> StudentTMixtureCoefficientPriors:
     """Build all coefficient priors needed by ``fit_studentt_mixture_vb``."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (
+            ("mean", "X_mean", 0),
+            ("df", "X_df", 1),
+            ("scale", "X_scale", 2),
+        ),
+    )
     return StudentTMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
-        df=build_gaussian_coefficient_prior(
-            inputs.X_df,
-            setting.prior_mean_feat[1],
-            setting.prior_std_feat[1],
-            setting.link_types[1],
-            setting.prior_shrink[1],
-        ),
-        scale=build_gaussian_coefficient_prior(
-            inputs.X_scale,
-            setting.prior_mean_feat[2],
-            setting.prior_std_feat[2],
-            setting.link_types[2],
-            setting.prior_shrink[2],
-        ),
+        mean=feature_priors["mean"],
+        df=feature_priors["df"],
+        scale=feature_priors["scale"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,
@@ -605,28 +562,19 @@ def build_splitnormal_mixture_priors(
 ) -> SplitNormalMixtureCoefficientPriors:
     """Build all coefficient priors needed by ``fit_splitnormal_mixture_vb``."""
 
+    feature_priors = _build_feature_priors(
+        inputs,
+        setting,
+        (
+            ("mean", "X_mean", 0),
+            ("scale", "X_scale", 1),
+            ("skewness", "X_skewness", 2),
+        ),
+    )
     return SplitNormalMixtureCoefficientPriors(
-        mean=build_gaussian_coefficient_prior(
-            inputs.X_mean,
-            setting.prior_mean_feat[0],
-            setting.prior_std_feat[0],
-            setting.link_types[0],
-            setting.prior_shrink[0],
-        ),
-        scale=build_gaussian_coefficient_prior(
-            inputs.X_scale,
-            setting.prior_mean_feat[1],
-            setting.prior_std_feat[1],
-            setting.link_types[1],
-            setting.prior_shrink[1],
-        ),
-        skewness=build_gaussian_coefficient_prior(
-            inputs.X_skewness,
-            setting.prior_mean_feat[2],
-            setting.prior_std_feat[2],
-            setting.link_types[2],
-            setting.prior_shrink[2],
-        ),
+        mean=feature_priors["mean"],
+        scale=feature_priors["scale"],
+        skewness=feature_priors["skewness"],
         gating=build_gating_prior(
             inputs.Z,
             setting.n_components,

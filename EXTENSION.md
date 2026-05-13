@@ -5,6 +5,10 @@ kernel has a small JAX model file, a setting dataclass, a prior builder, a VB
 fit path, and optional predictive scoring support. New distributions should
 follow that pattern before adding abstractions.
 
+Shared cross-model wiring lives in `gsm/model_registry.py`, common mixture
+weighting in `gsm/models/mixture.py`, common feature-prior construction in
+`gsm/priors.py`, and common mean-field fitting in `gsm/vi/engine.py`.
+
 Use this guide when adding another GSM/MoE expert distribution such as Gamma,
 Beta, Poisson, negative binomial, asymmetric kernels, or another custom density.
 
@@ -165,9 +169,13 @@ class NewMixtureCoefficientPriors:
     gating: GaussianCoefficientPrior | None
 ```
 
-Then add `build_new_mixture_priors(inputs, setting)` using
-`build_gaussian_coefficient_prior` for every feature and `build_gating_prior`
-for the gating coefficients.
+Then add `build_new_mixture_priors(inputs, setting)`. For ordinary feature
+priors, use `_build_feature_priors(inputs, setting, specs)` and pass the
+returned feature priors into the dataclass. Use
+`build_gaussian_coefficient_prior` directly only when a feature needs special
+arguments.
+
+Use `build_gating_prior` for the gating coefficients.
 
 Use the MATLAB-style feature prior values from the corresponding `.m` settings
 file. The helper converts feature priors to link scale with
@@ -198,8 +206,12 @@ Add the same small set of functions the current models use:
 - `fit_new_mixture_vb`
 - `_build_new_variational_result`
 
-Finally export the public names from `gsm/variational.py` and add the model to
-`fit_variational`.
+The model-specific `fit_new_mixture_vb` wrapper should prepare inputs and
+priors, then call `fit_mean_field_mixture_vb(...)` from `gsm/vi/engine.py`.
+
+Finally export the public names from `gsm/variational.py` and register the
+model fitter in `gsm/model_registry.py`; `fit_variational` dispatches through
+that registry.
 
 The ELBO should have this form:
 
@@ -230,16 +242,12 @@ return jnp.mean(log_joint) + mean_field_gaussian_entropy(variational_tree["log_s
 Edit:
 
 ```text
-gsm/evaluation.py
+gsm/model_registry.py
 ```
 
-Add the model setting to `ModelSetting` and wire it into:
-
-- `_fit_model_standardization`
-- `_prepare_model_inputs`
-- `_sample_model_posterior`
-- `_tree_to_model_params`
-- `_pointwise_log_prob`
+Add a `ModelAdapter` entry to `MODEL_ADAPTERS` with the model's setting type,
+input preparation, standardization, posterior sampling, parameter conversion,
+fitter, and pointwise log-probability function.
 
 This enables posterior-sampled held-out ELPD/LPDS through the existing
 `fit_heldout_model_lpds` and `predictive_log_score` functions.
@@ -320,7 +328,7 @@ def log_prob(params, y, X_location, X_scale, Z):
 - Using SciPy density functions inside JAX objectives.
 - Returning scalar log likelihoods where pointwise scores are needed.
 - Applying Python `if` statements to JAX arrays.
-- Adding a model to `fit_variational` but not to `evaluation.py`.
+- Adding a fitter without registering the model adapter used for scoring.
 - Ignoring the distribution support, especially for positive-only responses.
 - Initializing log-linked intercepts on the feature scale instead of the link
   scale.

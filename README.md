@@ -160,12 +160,14 @@ python scripts/run_gaussian_sp500.py \
 gsm/
   config.py                 # model and fit dataclasses
   data.py                   # CSV/.mat loading, splits, standardization
-  evaluation.py             # posterior-sampled predictive scores
+  evaluation.py             # posterior-sampled predictive scoring facade
   links.py                  # link and inverse-link functions
-  variational.py            # public VB facade and model dispatch
+  model_registry.py         # model adapter registry for fitting/scoring dispatch
+  priors.py                 # link-scale coefficient and gating priors
+  variational.py            # public VB fitting facade
   vi/
     common.py               # shared VB result and preprocessing helpers
-    engine.py               # shared optimizer and posterior sampling helpers
+    engine.py               # shared optimizer, posterior sampling, mean-field fit helper
     betabinomial.py         # BetaBin VB fitting
     binomial.py             # Bin VB fitting
     gamma.py                # Gamma/GammaRep VB fitting
@@ -187,6 +189,7 @@ gsm/
     genpoisson.py           # generalized Poisson mixture log-density and predictions
     gaussian.py             # Gaussian mixture log-density and predictions
     lognormal.py            # lognormal mixture log-density and predictions
+    mixture.py              # shared finite-mixture/gating helpers
     negbin.py               # negative-binomial mixture log-density and predictions
     poisson.py              # Poisson mixture log-density and predictions
     splitnormal.py          # split-normal mixture log-density and predictions
