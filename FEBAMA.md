@@ -1,9 +1,6 @@
-# FEBAMA Migration Plan
+# FEBAMA
 
-Source inspected: `/home/fli/code/archives/febama`.
-
-Target: add a small `gsm.febama` submodule that ports the R package
-`febama` as an application layer over the current Python GSM core.
+A small `gsm.febama` submodule that ports the R package `febama` as an application layer over the current Python GSM core.
 
 Status as of 2026-05-13: the first Python FEBAMA slice is implemented. The
 current code supports precomputed LPD/features, MAP fitting of softmax gating
@@ -11,9 +8,9 @@ coefficients, a predictive-distribution registry, basic and optional base
 forecasters, `tsfeatures`-based feature extraction, feature cleaning/scaling,
 CSV feature-table loading, and a minimal runnable example script.
 
-## Source Summary
+## Package Summary
 
-`febama` is an R package for feature-based Bayesian forecast model averaging.
+`gsm.febama` is a Python package for feature-based Bayesian forecast model averaging.
 It combines predictive distributions from several base forecasters with
 time-varying softmax weights. The softmax linear predictors depend on time
 series features. With `m` base forecasters, FEBAMA estimates `m - 1` weight
@@ -79,7 +76,7 @@ class PredictiveDistribution:
     def variance(self) -> np.ndarray: ...
 ```
 
-Implementation should use a lightweight registry instead of branching
+Implementation uses a lightweight registry instead of branching
 throughout the application:
 
 ```python
