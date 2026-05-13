@@ -20,11 +20,11 @@ class LpdFeatures:
 
     lpd: np.ndarray
     features: np.ndarray
-    response: np.ndarray | None = None
     feature_mean: np.ndarray | None = None
     feature_sd: np.ndarray | None = None
     model_names: tuple[str, ...] | None = None
     feature_names: tuple[str, ...] | None = None
+    response: np.ndarray | None = None
     origin: np.ndarray | None = None
     date: tuple[str, ...] | None = None
 

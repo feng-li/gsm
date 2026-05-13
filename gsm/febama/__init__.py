@@ -27,6 +27,7 @@ from gsm.febama.forecasters import (
     naive_fore,
     rw_drift_fore,
 )
+from gsm.febama.forecast import FebamaForecast, forecast_febama, mase, smape
 from gsm.febama.features import (
     SP500_TABLE3_FEATURES,
     PrecomputedFeatureTable,
@@ -47,6 +48,7 @@ from gsm.febama.scoring import linear_predictors, logscore, log_weights, respons
 __all__ = [
     "FebamaConfig",
     "FebamaFit",
+    "FebamaForecast",
     "FebamaMapResult",
     "FebamaScore",
     "LpdFeatures",
@@ -65,6 +67,7 @@ __all__ = [
     "ets_fore",
     "fit_febama",
     "fit_map",
+    "forecast_febama",
     "garch_fore",
     "get_distribution",
     "linear_predictors",
@@ -73,6 +76,7 @@ __all__ = [
     "log_posterior",
     "logscore",
     "log_weights",
+    "mase",
     "naive_fore",
     "prepare_lpd_features",
     "read_precomputed_feature_table",
@@ -81,5 +85,6 @@ __all__ = [
     "responsibilities",
     "rw_drift_fore",
     "score_febama",
+    "smape",
     "standardize_features",
 ]

@@ -6,8 +6,8 @@ Status as of 2026-05-13: the first Python FEBAMA slice is implemented. The
 current code supports precomputed LPD/features, MAP fitting of softmax gating
 coefficients, a predictive-distribution registry, basic and optional base
 forecasters, `tsfeatures`-based feature extraction, feature cleaning/scaling,
-CSV feature-table loading, rolling-origin LPD/feature construction, and a
-minimal runnable example script.
+CSV feature-table loading, rolling-origin LPD/feature construction, one-step
+forecasting/metrics, and a minimal runnable example script.
 
 ## Package Summary
 
@@ -140,12 +140,14 @@ gsm/febama/
   data.py
   distributions.py
   features.py
+  forecast.py
   forecasters.py
   inference.py
   scoring.py
 ```
 
-`forecast.py` remains a later recursive-forecasting layer.
+`forecast.py` currently implements one-step forecasting. Recursive multi-step
+forecasting remains a later layer.
 
 Do not put fixed data paths into config. Example scripts should accept `--data`
 and config objects should only describe model structure and fitting choices.
@@ -163,10 +165,13 @@ from gsm.febama import (
     compute_tsfeatures,
     compute_weights,
     fit_febama,
+    forecast_febama,
     log_prob_matrix,
+    mase,
     prepare_lpd_features,
     read_precomputed_feature_table,
     score_febama,
+    smape,
     standardize_features,
 )
 ```
@@ -175,8 +180,6 @@ Target API still to add after recursive forecasting exists:
 
 ```python
 from gsm.febama import (
-    compute_lpd_features,
-    forecast_febama,
     summarize_performance,
 )
 ```
@@ -187,7 +190,7 @@ Expected objects:
 - `LpdFeatures(lpd, features, feature_mean=None, feature_sd=None, model_names=..., feature_names=...)`.
 - `PredictiveDistribution(name, params)` for component forecasts.
 - `FebamaFit(method, beta, add_intercept, result)` for the current MAP fit.
-- `FebamaForecast(forecast, weights, log_score, mase, smape, details)`.
+- `FebamaForecast(forecast, weights, log_score, mase, smape, lpd, features)`.
 
 ## Migration Phases
 
@@ -362,7 +365,7 @@ Remaining:
 - richer non-Gaussian forecaster examples that return Student-t, split-t,
   gamma, lognormal, or count predictive distributions.
 
-### Phase 5: Recursive Forecasting and Metrics - Not Started
+### Phase 5: Recursive Forecasting and Metrics - Partial
 
 Port `R/forecast.R` after scoring, inference, and basic forecasters exist.
 
@@ -388,6 +391,20 @@ Acceptance tests:
 - all forecast outputs are finite on the tiny two-model example.
 - the same forecast code works when components use different predictive
   distributions, provided all support the observed response.
+
+Implemented:
+
+- `gsm/febama/forecast.py`.
+- `FebamaForecast` result container.
+- one-step `forecast_febama(...)`.
+- `mase(...)` and `smape(...)`.
+- focused tests in `tests/test_febama_forecast.py`.
+
+Remaining:
+
+- recursive multi-step forecasting.
+- full `summarize_performance(...)` helper for lists of forecast results.
+- posterior-sampled forecast weights after FEBAMA VB exists.
 
 ### Phase 6: S&P 500 Application Scripts - Started
 
@@ -483,6 +500,7 @@ Current Python FEBAMA tests:
 - `tests/test_febama_api.py`
 - `tests/test_febama_distributions.py`
 - `tests/test_febama_features.py`
+- `tests/test_febama_forecast.py`
 - `tests/test_febama_forecasters.py`
 - `tests/test_febama_inference.py`
 - `tests/test_febama_scoring.py`
@@ -518,6 +536,7 @@ Completed:
 7. Added `forecasters.py` for naive, drift, AutoETS/AutoARIMA, and
    GARCH/EGARCH forecasters.
 8. Added `scripts/run_febama_example.py`.
+9. Added one-step `forecast_febama(...)` and FEBAMA forecast metrics.
 
 Recent verification:
 
@@ -530,10 +549,9 @@ Recent verification:
 The next useful slice should make FEBAMA a complete forecasting workflow rather
 than a precomputed-LPD/MAP kernel:
 
-1. Add `forecast.py` with recursive forecasting and metrics.
+1. Extend `forecast.py` from one-step to recursive multi-step forecasting.
    - update features through the forecast horizon;
-   - compute per-horizon weights;
-   - produce log score, MASE, and SMAPE.
+   - compute per-horizon weights.
 2. Add FEBAMA mean-field VB for gating coefficients.
    - reuse the existing `gsm.vi.engine` pattern where possible;
    - add posterior-sampled weights and predictive scores.

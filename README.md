@@ -69,6 +69,7 @@ from one GSM mixture kernel. The current Python slice includes:
 - `tsfeatures` integration, feature cleaning/scaling, and precomputed feature
   table loading.
 - MAP fitting for FEBAMA gating coefficients.
+- One-step FEBAMA forecasting with log score, MASE, and SMAPE.
 
 ## Installation
 
@@ -197,6 +198,7 @@ gsm/
     data.py                 # FEBAMA data containers
     distributions.py        # predictive distribution registry
     features.py             # tsfeatures adapter and feature cleaning/scaling
+    forecast.py             # one-step forecasting and metrics
     forecasters.py          # naive, drift, AutoETS/AutoARIMA, GARCH/EGARCH
     inference.py            # MAP fitting for gating coefficients
     scoring.py              # JAX softmax weights and log predictive score
@@ -289,7 +291,8 @@ print(score.total)
 For live rolling-origin LPD and feature construction, use
 `compute_lpd_features(...)`. The example script `scripts/run_febama_example.py`
 uses that public helper and accepts `--data`, so data paths stay outside the
-FEBAMA config.
+FEBAMA config. For one-step forecasting after fitting, use
+`forecast_febama(...)`.
 
 ## Data
 
