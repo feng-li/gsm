@@ -16,11 +16,11 @@ if str(PYTHON_CODE_ROOT) not in sys.path:
     sys.path.insert(0, str(PYTHON_CODE_ROOT))
 
 from gsm.febama import (  # noqa: E402
+    SeriesData,
     clean_features,
-    compute_tsfeatures,
+    compute_lpd_features,
     compute_weights,
     fit_febama,
-    log_prob_matrix,
     naive_fore,
     prepare_lpd_features,
     rw_drift_fore,
@@ -51,23 +51,18 @@ def main() -> None:
     args = parser.parse_args()
 
     y, dates = _read_series(args.data, args.value_column, args.date_column)
-    lpd, features, origin_dates = _rolling_lpd_features(
-        y=y,
-        dates=dates,
+    lpd_features = compute_lpd_features(
+        SeriesData(x=y, date=dates),
+        forecasters=(naive_fore, rw_drift_fore),
+        feature_names=tuple(args.features),
+        model_names=MODEL_NAMES,
         start=args.start,
         max_origins=args.max_origins,
         feature_window=args.feature_window,
-        feature_names=tuple(args.features),
     )
-    train, test = _train_test_split(lpd, features, origin_dates, args.test_size)
+    train_raw, test_raw = _train_test_split(lpd_features, args.test_size)
 
-    train_data = prepare_lpd_features(
-        train["lpd"],
-        train["features"],
-        model_names=MODEL_NAMES,
-        feature_names=tuple(args.features),
-    )
-    train_clean = clean_features(train_data)
+    train_clean = clean_features(train_raw)
     fit = fit_febama(
         train_clean,
         coefficient_prior_scale=args.prior_scale,
@@ -75,28 +70,32 @@ def main() -> None:
     )
 
     test_features = standardize_features(
-        test["features"],
+        test_raw.features,
         train_clean.feature_mean,
         train_clean.feature_sd,
         feature_names=tuple(args.features),
         reference_feature_names=train_clean.feature_names,
     )
     test_data = prepare_lpd_features(
-        test["lpd"],
+        test_raw.lpd,
         test_features,
         model_names=MODEL_NAMES,
         feature_names=train_clean.feature_names,
+        response=test_raw.response,
+        origin=test_raw.origin,
+        date=test_raw.date,
     )
     test_score = score_febama(test_data, fit)
-    equal_weight_score = _equal_weight_score(test["lpd"])
+    equal_weight_score = _equal_weight_score(test_raw.lpd)
     weights = compute_weights(fit, test_data.features)
 
     print(f"data: {args.data}")
     print(f"rows: {y.shape[0]}")
-    print(f"rolling origins: {lpd.shape[0]}")
-    print(f"train origins: {train['lpd'].shape[0]}")
-    print(f"test origins: {test['lpd'].shape[0]}")
-    print(f"test dates: {test['dates'][0]} to {test['dates'][-1]}")
+    print(f"rolling origins: {lpd_features.lpd.shape[0]}")
+    print(f"train origins: {train_raw.lpd.shape[0]}")
+    print(f"test origins: {test_raw.lpd.shape[0]}")
+    if test_raw.date is not None:
+        print(f"test dates: {test_raw.date[0]} to {test_raw.date[-1]}")
     print(f"base models: {', '.join(MODEL_NAMES)}")
     print(f"requested features: {', '.join(args.features)}")
     print(f"kept features: {', '.join(train_clean.feature_names) or '(intercept only)'}")
@@ -108,7 +107,11 @@ def main() -> None:
         print(f"  {name}: {weight:.4f}")
 
 
-def _read_series(path: Path, value_column: str, date_column: str) -> tuple[np.ndarray, tuple[str, ...]]:
+def _read_series(
+    path: Path,
+    value_column: str,
+    date_column: str,
+) -> tuple[np.ndarray, tuple[str, ...]]:
     values: list[float] = []
     dates: list[str] = []
     with path.open(newline="") as handle:
@@ -129,65 +132,32 @@ def _read_series(path: Path, value_column: str, date_column: str) -> tuple[np.nd
     return np.asarray(values, dtype=float), tuple(dates)
 
 
-def _rolling_lpd_features(
-    y: np.ndarray,
-    dates: tuple[str, ...],
-    start: int,
-    max_origins: int,
-    feature_window: int,
-    feature_names: tuple[str, ...],
-) -> tuple[np.ndarray, np.ndarray, tuple[str, ...]]:
-    if start < 2:
-        raise ValueError("start must leave at least two historical observations")
-    if max_origins < 2:
-        raise ValueError("max_origins must be at least two")
-    if feature_window < 2:
-        raise ValueError("feature_window must be at least two")
+def _train_test_split(lpd_features, test_size: int):
+    if test_size < 1:
+        raise ValueError("test_size must be positive")
+    if test_size >= lpd_features.lpd.shape[0]:
+        raise ValueError("test_size must be smaller than the number of rolling origins")
 
-    stop = min(y.shape[0], start + max_origins)
-    if stop - start < 2:
-        raise ValueError("not enough observations for the requested rolling origins")
-
-    lpd_rows: list[np.ndarray] = []
-    feature_rows: list[list[float]] = []
-    origin_dates: list[str] = []
-    for origin in range(start, stop):
-        history = y[:origin]
-        feature_history = history[-feature_window:]
-        feature_values = compute_tsfeatures(
-            feature_history,
-            frequency=1,
-            feature_names=feature_names,
-        )
-        predictions = (naive_fore(history, 1), rw_drift_fore(history, 1))
-        lpd_row = np.asarray(log_prob_matrix(np.asarray([y[origin]]), predictions))[0]
-
-        feature_rows.append([feature_values[name] for name in feature_names])
-        lpd_rows.append(lpd_row)
-        origin_dates.append(dates[origin])
-
-    return (
-        np.asarray(lpd_rows, dtype=float),
-        np.asarray(feature_rows, dtype=float),
-        tuple(origin_dates),
+    split = lpd_features.lpd.shape[0] - test_size
+    return _slice_lpd_features(lpd_features, slice(None, split)), _slice_lpd_features(
+        lpd_features,
+        slice(split, None),
     )
 
 
-def _train_test_split(
-    lpd: np.ndarray,
-    features: np.ndarray,
-    dates: tuple[str, ...],
-    test_size: int,
-) -> tuple[dict[str, object], dict[str, object]]:
-    if test_size < 1:
-        raise ValueError("test_size must be positive")
-    if test_size >= lpd.shape[0]:
-        raise ValueError("test_size must be smaller than the number of rolling origins")
-
-    split = lpd.shape[0] - test_size
-    train = {"lpd": lpd[:split], "features": features[:split], "dates": dates[:split]}
-    test = {"lpd": lpd[split:], "features": features[split:], "dates": dates[split:]}
-    return train, test
+def _slice_lpd_features(lpd_features, rows):
+    indices = np.arange(lpd_features.lpd.shape[0])[rows]
+    return prepare_lpd_features(
+        lpd_features.lpd[rows],
+        lpd_features.features[rows],
+        model_names=lpd_features.model_names,
+        feature_names=lpd_features.feature_names,
+        response=None if lpd_features.response is None else lpd_features.response[rows],
+        origin=None if lpd_features.origin is None else lpd_features.origin[rows],
+        date=None
+        if lpd_features.date is None
+        else tuple(lpd_features.date[int(i)] for i in indices),
+    )
 
 
 def _equal_weight_score(lpd: np.ndarray) -> float:

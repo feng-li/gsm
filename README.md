@@ -286,9 +286,10 @@ score = score_febama(lpd_features, fit)
 print(score.total)
 ```
 
-For live feature extraction, use `compute_tsfeatures(...)` or the example
-script `scripts/run_febama_example.py`. The script accepts `--data`, so data
-paths stay outside the FEBAMA config.
+For live rolling-origin LPD and feature construction, use
+`compute_lpd_features(...)`. The example script `scripts/run_febama_example.py`
+uses that public helper and accepts `--data`, so data paths stay outside the
+FEBAMA config.
 
 ## Data
 

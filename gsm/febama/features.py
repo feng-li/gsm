@@ -68,10 +68,13 @@ def clean_features(lpd_features: LpdFeatures, drop_constant: bool = True) -> Lpd
     return LpdFeatures(
         lpd=lpd_features.lpd,
         features=scaled,
+        response=lpd_features.response,
         feature_mean=kept_mean,
         feature_sd=kept_sd,
         model_names=lpd_features.model_names,
         feature_names=tuple(np.asarray(names, dtype=object)[keep].tolist()),
+        origin=lpd_features.origin,
+        date=lpd_features.date,
     )
 
 
@@ -191,8 +194,11 @@ def read_precomputed_feature_table(
         lpd_features = LpdFeatures(
             lpd=_numeric_matrix(rows, lpd_names),
             features=features,
+            response=response,
             model_names=None if model_names is None else tuple(model_names),
             feature_names=feature_names,
+            origin=origin,
+            date=date,
         )
     return PrecomputedFeatureTable(
         features=features,

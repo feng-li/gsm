@@ -2,9 +2,13 @@ import numpy as np
 import pytest
 
 from gsm.febama import (
+    SeriesData,
+    compute_lpd_features,
     compute_weights,
     fit_febama,
+    naive_fore,
     prepare_lpd_features,
+    rw_drift_fore,
     score_febama,
 )
 from gsm.febama.scoring import add_intercept, logscore
@@ -73,7 +77,71 @@ def test_febama_compute_weights_validates_feature_shape():
         compute_weights(fit, np.ones(3))
 
 
+def test_febama_compute_lpd_features_builds_rolling_training_data():
+    y = np.linspace(1.0, 2.0, 12)
+    dates = tuple(f"date-{idx}" for idx in range(y.shape[0]))
+
+    lpd_features = compute_lpd_features(
+        SeriesData(x=y, date=dates),
+        forecasters=(naive_fore, rw_drift_fore),
+        feature_names=("last", "mean"),
+        model_names=("naive", "drift"),
+        start=5,
+        max_origins=4,
+        feature_window=3,
+        feature_function=_simple_features,
+    )
+
+    assert lpd_features.lpd.shape == (4, 2)
+    assert lpd_features.features.shape == (4, 2)
+    assert lpd_features.model_names == ("naive", "drift")
+    assert lpd_features.feature_names == ("last", "mean")
+    np.testing.assert_allclose(lpd_features.response, y[5:9])
+    np.testing.assert_array_equal(lpd_features.origin, np.asarray([5, 6, 7, 8]))
+    assert lpd_features.date == dates[5:9]
+    np.testing.assert_allclose(
+        lpd_features.features[0],
+        np.asarray([y[4], np.mean(y[2:5])]),
+    )
+    assert np.isfinite(lpd_features.lpd).all()
+
+
+def test_febama_compute_lpd_features_accepts_precomputed_features():
+    y = np.linspace(1.0, 2.0, 8)
+    features = np.arange(6.0).reshape((3, 2))
+
+    lpd_features = compute_lpd_features(
+        y,
+        forecasters=(naive_fore, rw_drift_fore),
+        feature_names=("a", "b"),
+        start=3,
+        max_origins=3,
+        precomputed_features=features,
+    )
+
+    np.testing.assert_allclose(lpd_features.features, features)
+    assert lpd_features.feature_names == ("a", "b")
+    np.testing.assert_array_equal(lpd_features.origin, np.asarray([3, 4, 5]))
+
+
+def test_febama_compute_lpd_features_validates_inputs():
+    with pytest.raises(ValueError, match="at least two forecasters"):
+        compute_lpd_features([1.0, 2.0, 3.0], forecasters=(naive_fore,))
+    with pytest.raises(ValueError, match="feature_names are required"):
+        compute_lpd_features(
+            [1.0, 2.0, 3.0, 4.0],
+            forecasters=(naive_fore, rw_drift_fore),
+            start=2,
+            feature_function=_simple_features,
+        )
+
+
 def _zero_beta_score(lpd_features):
     features = add_intercept(lpd_features.features)
     beta = np.zeros((lpd_features.lpd.shape[1] - 1, features.shape[1]))
     return float(logscore(lpd_features.lpd, features, beta, sum=True))
+
+
+def _simple_features(history):
+    history = np.asarray(history, dtype=float)
+    return {"last": history[-1], "mean": float(np.mean(history))}

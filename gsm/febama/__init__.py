@@ -3,6 +3,7 @@
 from gsm.febama.api import (
     FebamaFit,
     FebamaScore,
+    compute_lpd_features,
     compute_weights,
     fit_febama,
     prepare_lpd_features,
@@ -57,6 +58,7 @@ __all__ = [
     "active_beta_vector",
     "auto_arima_fore",
     "clean_features",
+    "compute_lpd_features",
     "compute_tsfeatures",
     "compute_weights",
     "egarch_fore",

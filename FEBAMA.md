@@ -6,7 +6,8 @@ Status as of 2026-05-13: the first Python FEBAMA slice is implemented. The
 current code supports precomputed LPD/features, MAP fitting of softmax gating
 coefficients, a predictive-distribution registry, basic and optional base
 forecasters, `tsfeatures`-based feature extraction, feature cleaning/scaling,
-CSV feature-table loading, and a minimal runnable example script.
+CSV feature-table loading, rolling-origin LPD/feature construction, and a
+minimal runnable example script.
 
 ## Package Summary
 
@@ -263,7 +264,7 @@ Remaining:
 - posterior-sampled FEBAMA weights/scores.
 - optional ARD over gating-feature columns.
 
-### Phase 3: Feature Cleaning and Precomputed Feature Mode - Partial
+### Phase 3: Feature Cleaning and Precomputed Feature Mode - Done
 
 Port the R feature-cleaning contract before trying to reproduce all THA
 features.
@@ -298,13 +299,14 @@ Implemented:
   one time series.
 - `SP500_TABLE3_FEATURES` stores the 15 stock-market feature names from the R
   S&P 500 example.
+- `compute_lpd_features(...)` builds rolling component LPDs and feature rows
+  from a series, a forecaster list, live feature functions, or precomputed
+  feature matrices.
 - tests in `tests/test_febama_features.py`.
+- workflow tests in `tests/test_febama_api.py`.
 
 Remaining:
 
-- public `compute_lpd_features(...)` workflow wrapper.
-- production rolling-origin feature/LPD constructor shared by scripts and
-  recursive forecasting.
 - exact R THA feature parity review, if needed for paper replication.
 
 ### Phase 4: Base Forecasters - Partial
@@ -528,19 +530,14 @@ Recent verification:
 The next useful slice should make FEBAMA a complete forecasting workflow rather
 than a precomputed-LPD/MAP kernel:
 
-1. Add `compute_lpd_features(...)` as the shared rolling-origin builder.
-   - input: `SeriesData` or arrays;
-   - forecaster list;
-   - feature function or precomputed feature table;
-   - external `--data` paths only in scripts.
-2. Add `forecast.py` with recursive forecasting and metrics.
+1. Add `forecast.py` with recursive forecasting and metrics.
    - update features through the forecast horizon;
    - compute per-horizon weights;
    - produce log score, MASE, and SMAPE.
-3. Add FEBAMA mean-field VB for gating coefficients.
+2. Add FEBAMA mean-field VB for gating coefficients.
    - reuse the existing `gsm.vi.engine` pattern where possible;
    - add posterior-sampled weights and predictive scores.
-4. Add the paper-style S&P 500 scripts.
+3. Add the paper-style S&P 500 scripts.
    - `run_febama_sp500.py`;
    - `prepare_febama_sp500_features.py`;
    - `compare_febama_algorithms.py`.
