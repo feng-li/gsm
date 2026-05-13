@@ -16,6 +16,7 @@ import jax.numpy as jnp
 from jax.nn import logsumexp
 
 from gsm.links import inverse_link
+from gsm.models.mixture import log_mixture_weights
 
 
 @dataclass(frozen=True)
@@ -39,23 +40,6 @@ def component_features(params: GaussianMixtureParams, X_mean, X_variance):
     mean = inverse_link(X_mean @ params.mean_coef.T, "identity")
     variance = inverse_link(X_variance @ params.log_variance_coef.T, "log")
     return mean, variance
-
-
-def log_mixture_weights(gating_coef, Z):
-    """Reference-class multinomial-logit weights.
-
-    MATLAB identifies the first component by setting its gating coefficients to
-    zero. ``gating_coef`` therefore has shape ``(n_components - 1, n_cov_mix)``.
-    """
-
-    if gating_coef.size == 0:
-        return jnp.zeros((Z.shape[0], 1))
-
-    scores = jnp.concatenate(
-        [jnp.zeros((Z.shape[0], 1)), Z @ gating_coef.T],
-        axis=1,
-    )
-    return scores - logsumexp(scores, axis=1, keepdims=True)
 
 
 def component_log_prob(y, mean, variance):

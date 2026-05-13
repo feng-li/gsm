@@ -13,7 +13,7 @@ from jax.nn import logsumexp
 
 from gsm.links import inverse_link
 from gsm.models.exphazard import _as_column, _as_float_column, _log1mexp
-from gsm.models.gaussian import log_mixture_weights
+from gsm.models.mixture import log_mixture_weights
 
 
 @dataclass(frozen=True)

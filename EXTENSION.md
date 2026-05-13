@@ -55,7 +55,7 @@ The expected shapes are:
 - `component_log_prob`: `(n_obs, n_components)`
 - `log_prob_observations`: `(n_obs,)`
 
-Reuse `gsm.models.gaussian.log_mixture_weights` unless the model needs a
+Reuse `gsm.models.mixture.log_mixture_weights` unless the model needs a
 different gating construction. The MATLAB GSM convention uses a reference first
 component, so the first component has zero gating coefficients.
 
@@ -280,7 +280,7 @@ import jax.numpy as jnp
 from jax.nn import logsumexp
 
 from gsm.links import inverse_link
-from gsm.models.gaussian import log_mixture_weights
+from gsm.models.mixture import log_mixture_weights
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from jax.nn import logsumexp
 
 from gsm.links import inverse_link
-from gsm.models.gaussian import log_mixture_weights
+from gsm.models.mixture import log_mixture_weights
 
 
 @dataclass(frozen=True)
