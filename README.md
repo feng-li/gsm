@@ -199,9 +199,9 @@ gsm/
     data.py                 # FEBAMA data containers
     distributions.py        # predictive distribution registry
     features.py             # tsfeatures adapter and feature cleaning/scaling
-    forecast.py             # one-step forecasting and metrics
+    forecast.py             # recursive forecasting and metrics
     forecasters.py          # naive, drift, AutoETS/AutoARIMA, GARCH/EGARCH
-    inference.py            # MAP fitting for gating coefficients
+    inference.py            # MAP/VB fitting for gating coefficients
     scoring.py              # JAX softmax weights and log predictive score
 scripts/
   BetaReg_config.py         # default Rajan beta-regression specification
@@ -274,7 +274,13 @@ Gaussian posterior with coefficient means and log standard deviations.
 For precomputed component log predictive densities and feature matrices:
 
 ```python
-from gsm.febama import clean_features, fit_febama, prepare_lpd_features, score_febama
+from gsm.febama import (
+    clean_features,
+    fit_febama,
+    prepare_lpd_features,
+    score_febama,
+    summarize_performance,
+)
 
 lpd_features = prepare_lpd_features(
     lpd,
@@ -296,7 +302,8 @@ returns posterior-sampled weights, forecasts, and log scores for VB fits.
 For live rolling-origin LPD and feature construction, use
 `compute_lpd_features(...)`. The example script `scripts/run_febama_example.py`
 uses that public helper and accepts `--data`, so data paths stay outside the
-FEBAMA config. For one-step forecasting after fitting, use `forecast_febama(...)`.
+FEBAMA config. For recursive forecasting after fitting, use `forecast_febama(...)`.
+Use `summarize_performance(...)` to aggregate a list of forecast results.
 
 ## Data
 

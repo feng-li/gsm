@@ -28,7 +28,14 @@ from gsm.febama.forecasters import (
     naive_fore,
     rw_drift_fore,
 )
-from gsm.febama.forecast import FebamaForecast, forecast_febama, mase, smape
+from gsm.febama.forecast import (
+    FebamaForecast,
+    FebamaPerformance,
+    forecast_febama,
+    mase,
+    smape,
+    summarize_performance,
+)
 from gsm.febama.features import (
     SP500_TABLE3_FEATURES,
     PrecomputedFeatureTable,
@@ -55,6 +62,7 @@ __all__ = [
     "FebamaFit",
     "FebamaForecast",
     "FebamaMapResult",
+    "FebamaPerformance",
     "FebamaScore",
     "FebamaVbPosterior",
     "FebamaVbResult",
@@ -97,4 +105,5 @@ __all__ = [
     "score_febama",
     "smape",
     "standardize_features",
+    "summarize_performance",
 ]

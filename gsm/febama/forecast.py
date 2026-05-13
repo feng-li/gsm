@@ -1,4 +1,4 @@
-"""One-step FEBAMA forecasting and forecast metrics."""
+"""FEBAMA forecasting and forecast metrics."""
 
 from __future__ import annotations
 
@@ -32,6 +32,20 @@ class FebamaForecast:
     log_score_samples: np.ndarray | None = None
 
 
+@dataclass(frozen=True)
+class FebamaPerformance:
+    """Aggregate performance summary for FEBAMA forecast results."""
+
+    n_forecasts: int
+    n_scored_forecasts: int
+    total_log_score: float | None
+    mean_log_score: float | None
+    mean_mase: float | None
+    mean_smape: float | None
+    total_log_score_samples: np.ndarray | None = None
+    mean_log_score_samples: np.ndarray | None = None
+
+
 def forecast_febama(
     data,
     fit,
@@ -46,11 +60,11 @@ def forecast_febama(
     n_weight_samples: int = 0,
     seed: int = 123,
 ) -> FebamaForecast:
-    """Produce a one-step FEBAMA forecast from fitted gating coefficients."""
+    """Produce a recursive FEBAMA forecast from fitted gating coefficients."""
 
     horizon = int(horizon)
-    if horizon != 1:
-        raise ValueError("only horizon=1 is currently implemented")
+    if horizon < 1:
+        raise ValueError("horizon must be positive")
     n_weight_samples = int(n_weight_samples)
     if n_weight_samples < 0:
         raise ValueError("n_weight_samples must be nonnegative")
@@ -67,22 +81,48 @@ def forecast_febama(
     if raw_feature_names is None:
         raise ValueError("feature_names are required")
 
-    history = y if feature_window is None else y[-int(feature_window) :]
-    raw_features = _feature_row(history, raw_feature_names, feature_function, frequency)
-    scaled_features = standardize_features(
-        raw_features,
-        lpd_features.feature_mean,
-        lpd_features.feature_sd,
-        feature_names=raw_feature_names,
-        reference_feature_names=lpd_features.feature_names,
-    )
-    weights = compute_weights(fit, scaled_features)
+    recursive_history = np.asarray(y, dtype=float)
+    feature_rows = []
+    weight_rows = []
+    mean_rows = []
+    step_predictions = []
+    forecast_values = []
+    for _ in range(horizon):
+        history = (
+            recursive_history
+            if feature_window is None
+            else recursive_history[-int(feature_window) :]
+        )
+        raw_features = _feature_row(history, raw_feature_names, feature_function, frequency)
+        scaled_step = standardize_features(
+            raw_features,
+            lpd_features.feature_mean,
+            lpd_features.feature_sd,
+            feature_names=raw_feature_names,
+            reference_feature_names=lpd_features.feature_names,
+        )
+        weights_step = compute_weights(fit, scaled_step)
+        predictions_step = tuple(
+            forecaster(recursive_history, 1) for forecaster in forecaster_tuple
+        )
+        means_step = np.asarray(
+            [_one_step_mean(prediction) for prediction in predictions_step],
+            dtype=float,
+        ).reshape((1, -1))
+        forecast_step = float(np.sum(weights_step * means_step, axis=1)[0])
 
-    predictions = tuple(forecaster(y, horizon) for forecaster in forecaster_tuple)
-    means = np.column_stack(
-        [np.asarray(prediction.mean(), dtype=float) for prediction in predictions]
-    )
-    forecast = np.sum(weights * means, axis=1)
+        feature_rows.append(scaled_step)
+        weight_rows.append(weights_step)
+        mean_rows.append(means_step)
+        step_predictions.append(predictions_step)
+        forecast_values.append(forecast_step)
+        recursive_history = np.append(recursive_history, forecast_step)
+
+    scaled_features = np.vstack(feature_rows)
+    weights = np.vstack(weight_rows)
+    means = np.vstack(mean_rows)
+    forecast = np.asarray(forecast_values, dtype=float)
+    predictions = _stack_predictions(step_predictions)
     weight_samples = None
     forecast_samples = None
     log_score_samples = None
@@ -124,10 +164,39 @@ def forecast_febama(
         lpd=lpd,
         features=scaled_features,
         predictions=predictions,
-        date=dates,
+        date=None if dates is None else dates[:horizon],
         weight_samples=weight_samples,
         forecast_samples=forecast_samples,
         log_score_samples=log_score_samples,
+    )
+
+
+def summarize_performance(forecasts: Iterable[FebamaForecast]) -> FebamaPerformance:
+    """Summarize log-score, MASE, and sMAPE over FEBAMA forecast results."""
+
+    forecast_tuple = tuple(forecasts)
+    if not forecast_tuple:
+        raise ValueError("at least one forecast is required")
+
+    scored = [forecast for forecast in forecast_tuple if forecast.log_score is not None]
+    if scored:
+        log_scores = np.asarray([forecast.log_score for forecast in scored], dtype=float)
+        total_log_score = float(np.sum(log_scores))
+        mean_log_score = float(np.mean(log_scores))
+    else:
+        total_log_score = None
+        mean_log_score = None
+    total_samples, mean_samples = _sample_log_score_summary(scored)
+
+    return FebamaPerformance(
+        n_forecasts=len(forecast_tuple),
+        n_scored_forecasts=len(scored),
+        total_log_score=total_log_score,
+        mean_log_score=mean_log_score,
+        mean_mase=_mean_finite_metric(forecast_tuple, "mase"),
+        mean_smape=_mean_finite_metric(forecast_tuple, "smape"),
+        total_log_score_samples=total_samples,
+        mean_log_score_samples=mean_samples,
     )
 
 
@@ -213,3 +282,73 @@ def _feature_row(history, feature_names, feature_function, frequency) -> np.ndar
     if not np.all(np.isfinite(row)):
         raise ValueError("forecast features must be finite")
     return row
+
+
+def _mean_finite_metric(forecasts: tuple[FebamaForecast, ...], name: str) -> float | None:
+    values = [
+        float(value)
+        for value in (getattr(forecast, name) for forecast in forecasts)
+        if value is not None and np.isfinite(value)
+    ]
+    if not values:
+        return None
+    return float(np.mean(values))
+
+
+def _sample_log_score_summary(
+    scored: list[FebamaForecast],
+) -> tuple[np.ndarray | None, np.ndarray | None]:
+    if not scored or any(forecast.log_score_samples is None for forecast in scored):
+        return None, None
+    samples = []
+    for forecast in scored:
+        sample = np.asarray(forecast.log_score_samples, dtype=float).reshape((-1,))
+        if sample.size < 1:
+            raise ValueError("log_score_samples must not be empty")
+        if samples and sample.shape != samples[0].shape:
+            raise ValueError("log_score_samples must have matching shape")
+        samples.append(sample)
+    matrix = np.vstack(samples)
+    return np.sum(matrix, axis=0), np.mean(matrix, axis=0)
+
+
+def _one_step_mean(prediction: PredictiveDistribution) -> float:
+    values = np.asarray(prediction.mean(), dtype=float).reshape((-1,))
+    if values.shape != (1,):
+        raise ValueError("forecasters must return one-step predictions")
+    if not np.isfinite(values[0]):
+        raise ValueError("forecaster means must be finite")
+    return float(values[0])
+
+
+def _stack_predictions(
+    step_predictions: list[tuple[PredictiveDistribution, ...]],
+) -> tuple[PredictiveDistribution, ...]:
+    """Combine recursive one-step predictions into horizon-length predictions."""
+
+    n_models = len(step_predictions[0])
+    combined = []
+    for model_idx in range(n_models):
+        first = step_predictions[0][model_idx]
+        name = first.name
+        keys = tuple(first.params.keys())
+        params = {}
+        for step in step_predictions:
+            prediction = step[model_idx]
+            if prediction.name != name:
+                raise ValueError("forecaster distribution names must be stable by horizon")
+            if set(prediction.params) != set(keys):
+                raise ValueError("forecaster parameter names must be stable by horizon")
+        for key in keys:
+            values = [step[model_idx].params[key] for step in step_predictions]
+            if all(isinstance(value, str) for value in values):
+                if len(set(values)) != 1:
+                    raise ValueError("string distribution parameters must be stable by horizon")
+                params[key] = values[0]
+            else:
+                columns = [np.asarray(value, dtype=float).reshape((-1,)) for value in values]
+                if any(column.shape != (1,) for column in columns):
+                    raise ValueError("forecasters must return one-step distribution parameters")
+                params[key] = np.asarray([column[0] for column in columns], dtype=float)
+        combined.append(PredictiveDistribution(name, params))
+    return tuple(combined)

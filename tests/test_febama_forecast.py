@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from gsm.febama import (
+    FebamaForecast,
     PredictiveDistribution,
     SeriesData,
     clean_features,
@@ -10,6 +11,7 @@ from gsm.febama import (
     mase,
     prepare_lpd_features,
     smape,
+    summarize_performance,
 )
 
 
@@ -64,9 +66,13 @@ def test_forecast_febama_without_holdout_skips_scores():
     assert forecast.forecast.shape == (1,)
 
 
-def test_forecast_febama_vb_returns_posterior_sampled_forecasts():
-    fit, lpd_features = _fitted_vb_gate()
-    data = SeriesData(x=np.linspace(0.0, 1.0, 10), xx=np.asarray([0.2]))
+def test_forecast_febama_recurses_across_multi_step_horizon():
+    fit, lpd_features = _fitted_gate()
+    data = SeriesData(
+        x=np.linspace(0.0, 1.0, 10),
+        xx=np.asarray([0.2, 0.3, 0.4]),
+        date=tuple(f"date-{idx}" for idx in range(13)),
+    )
 
     forecast = forecast_febama(
         data,
@@ -74,15 +80,47 @@ def test_forecast_febama_vb_returns_posterior_sampled_forecasts():
         lpd_features,
         forecasters=(_zero_forecaster, _one_forecaster),
         feature_names=("level",),
-        feature_function=_level_feature,
+        feature_function=_last_feature,
+        horizon=3,
+    )
+
+    assert forecast.forecast.shape == (3,)
+    assert forecast.weights.shape == (3, 2)
+    assert forecast.lpd.shape == (3, 2)
+    assert forecast.features.shape == (3, 1)
+    assert forecast.date == ("date-10", "date-11", "date-12")
+    assert len(forecast.predictions) == 2
+    assert forecast.predictions[0].mean().shape == (3,)
+    np.testing.assert_allclose(forecast.weights.sum(axis=1), np.ones(3))
+    expected_second_feature = (
+        forecast.forecast[0] - lpd_features.feature_mean[0]
+    ) / lpd_features.feature_sd[0]
+    np.testing.assert_allclose(forecast.features[1, 0], expected_second_feature)
+    assert np.isfinite(forecast.log_score)
+    assert np.isfinite(forecast.mase)
+    assert np.isfinite(forecast.smape)
+
+
+def test_forecast_febama_vb_returns_posterior_sampled_forecasts():
+    fit, lpd_features = _fitted_vb_gate()
+    data = SeriesData(x=np.linspace(0.0, 1.0, 10), xx=np.asarray([0.2, 0.3, 0.4]))
+
+    forecast = forecast_febama(
+        data,
+        fit,
+        lpd_features,
+        forecasters=(_zero_forecaster, _one_forecaster),
+        feature_names=("level",),
+        feature_function=_last_feature,
+        horizon=3,
         n_weight_samples=4,
         seed=123,
     )
 
-    assert forecast.weight_samples.shape == (4, 1, 2)
-    assert forecast.forecast_samples.shape == (4, 1)
+    assert forecast.weight_samples.shape == (4, 3, 2)
+    assert forecast.forecast_samples.shape == (4, 3)
     assert forecast.log_score_samples.shape == (4,)
-    np.testing.assert_allclose(forecast.weight_samples.sum(axis=2), np.ones((4, 1)))
+    np.testing.assert_allclose(forecast.weight_samples.sum(axis=2), np.ones((4, 3)))
     assert np.isfinite(forecast.forecast_samples).all()
     assert np.isfinite(forecast.log_score_samples).all()
 
@@ -114,7 +152,7 @@ def test_forecast_febama_validates_current_scope_and_cleaning():
         feature_names=lpd_features.feature_names,
     )
 
-    with pytest.raises(ValueError, match="only horizon=1"):
+    with pytest.raises(ValueError, match="horizon"):
         forecast_febama(
             np.linspace(0.0, 1.0, 10),
             fit,
@@ -122,7 +160,7 @@ def test_forecast_febama_validates_current_scope_and_cleaning():
             forecasters=(_zero_forecaster, _one_forecaster),
             feature_names=("level",),
             feature_function=_level_feature,
-            horizon=2,
+            horizon=0,
         )
     with pytest.raises(ValueError, match="cleaned"):
         forecast_febama(
@@ -152,6 +190,49 @@ def test_febama_forecast_metrics_validate_shapes_and_zero_denominator():
         smape([1.0, 2.0], [1.0])
     with pytest.raises(ValueError, match="same shape"):
         mase([1.0, 2.0], [1.0], [1.0, 2.0])
+
+
+def test_summarize_performance_aggregates_scored_forecasts():
+    forecasts = (
+        _summary_forecast(log_score=1.0, mase=2.0, smape=10.0),
+        _summary_forecast(log_score=3.0, mase=np.nan, smape=20.0),
+        _summary_forecast(log_score=None, mase=None, smape=None),
+    )
+
+    summary = summarize_performance(forecasts)
+
+    assert summary.n_forecasts == 3
+    assert summary.n_scored_forecasts == 2
+    np.testing.assert_allclose(summary.total_log_score, 4.0)
+    np.testing.assert_allclose(summary.mean_log_score, 2.0)
+    np.testing.assert_allclose(summary.mean_mase, 2.0)
+    np.testing.assert_allclose(summary.mean_smape, 15.0)
+    assert summary.total_log_score_samples is None
+    assert summary.mean_log_score_samples is None
+
+
+def test_summarize_performance_aggregates_sampled_log_scores():
+    forecasts = (
+        _summary_forecast(log_score=1.0, log_score_samples=[0.8, 1.2]),
+        _summary_forecast(log_score=2.0, log_score_samples=[1.5, 2.5]),
+    )
+
+    summary = summarize_performance(forecasts)
+
+    np.testing.assert_allclose(summary.total_log_score_samples, [2.3, 3.7])
+    np.testing.assert_allclose(summary.mean_log_score_samples, [1.15, 1.85])
+
+
+def test_summarize_performance_validates_inputs():
+    with pytest.raises(ValueError, match="at least one forecast"):
+        summarize_performance([])
+    with pytest.raises(ValueError, match="matching shape"):
+        summarize_performance(
+            (
+                _summary_forecast(log_score=1.0, log_score_samples=[1.0, 2.0]),
+                _summary_forecast(log_score=2.0, log_score_samples=[1.0]),
+            )
+        )
 
 
 def _fitted_gate():
@@ -190,6 +271,10 @@ def _level_feature(history):
     return {"level": 1.0}
 
 
+def _last_feature(history):
+    return {"level": float(np.asarray(history)[-1])}
+
+
 def _zero_forecaster(y, horizon):
     return PredictiveDistribution(
         "gaussian",
@@ -201,4 +286,25 @@ def _one_forecaster(y, horizon):
     return PredictiveDistribution(
         "gaussian",
         {"mean": np.ones(horizon), "sd": np.full(horizon, 0.5)},
+    )
+
+
+def _summary_forecast(
+    log_score,
+    mase=1.0,
+    smape=1.0,
+    log_score_samples=None,
+):
+    return FebamaForecast(
+        forecast=np.zeros(1),
+        weights=np.ones((1, 1)),
+        log_score=log_score,
+        mase=mase,
+        smape=smape,
+        lpd=None,
+        features=np.zeros((1, 1)),
+        predictions=(),
+        log_score_samples=None
+        if log_score_samples is None
+        else np.asarray(log_score_samples, dtype=float),
     )

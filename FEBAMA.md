@@ -7,7 +7,8 @@ current code supports precomputed LPD/features, MAP fitting of softmax gating
 coefficients, a predictive-distribution registry, basic and optional base
 forecasters, `tsfeatures`-based feature extraction, feature cleaning/scaling,
 CSV feature-table loading, rolling-origin LPD/feature construction, one-step
-forecasting/metrics, and a minimal runnable example script.
+and recursive multi-step forecasting/metrics, and a minimal runnable example
+script.
 
 ## Package Summary
 
@@ -146,8 +147,8 @@ gsm/febama/
   scoring.py
 ```
 
-`forecast.py` currently implements one-step forecasting. Recursive multi-step
-forecasting remains a later layer.
+`forecast.py` currently implements recursive forecasting with per-horizon
+features, weights, component predictions, and optional VB sampled outputs.
 
 Do not put fixed data paths into config. Example scripts should accept `--data`
 and config objects should only describe model structure and fitting choices.
@@ -176,13 +177,6 @@ from gsm.febama import (
     score_febama,
     smape,
     standardize_features,
-)
-```
-
-Target API still to add after recursive forecasting exists:
-
-```python
-from gsm.febama import (
     summarize_performance,
 )
 ```
@@ -192,8 +186,9 @@ Expected objects:
 - `SeriesData(x, xx=None, date=None)` for one time series.
 - `LpdFeatures(lpd, features, feature_mean=None, feature_sd=None, model_names=..., feature_names=...)`.
 - `PredictiveDistribution(name, params)` for component forecasts.
-- `FebamaFit(method, beta, add_intercept, result)` for the current MAP fit.
+- `FebamaFit(method, beta, add_intercept, result)` for MAP or VB fits.
 - `FebamaForecast(forecast, weights, log_score, mase, smape, lpd, features)`.
+- `FebamaPerformance(...)` for summaries over forecast result lists.
 
 ## Migration Phases
 
@@ -401,16 +396,12 @@ Implemented:
 
 - `gsm/febama/forecast.py`.
 - `FebamaForecast` result container.
-- one-step `forecast_febama(...)`.
+- one-step and recursive multi-step `forecast_febama(...)`.
 - posterior-sampled VB forecast weights, forecasts, and log scores in
   `forecast_febama(...)`.
 - `mase(...)` and `smape(...)`.
+- `summarize_performance(...)`.
 - focused tests in `tests/test_febama_forecast.py`.
-
-Remaining:
-
-- recursive multi-step forecasting.
-- full `summarize_performance(...)` helper for lists of forecast results.
 
 ### Phase 6: S&P 500 Application Scripts - Started
 
@@ -546,24 +537,23 @@ Completed:
 10. Added FEBAMA mean-field VB and posterior-sampled weights.
 11. Added posterior-sampled VB forecast weights, forecasts, and log scores to
     `forecast_febama(...)`.
+12. Added recursive multi-step `forecast_febama(...)`.
+13. Added `summarize_performance(...)` for lists of forecast results.
 
 Recent verification:
 
 - `python -m py_compile` passed for the new FEBAMA feature files and example.
 - `python -m pytest tests/test_febama_features.py` passed.
 - Full package suite passed after adding FEBAMA features: `133 passed`.
-- FEBAMA test block passed after adding posterior-sampled forecast outputs:
-  `47 passed`.
+- FEBAMA test block passed after adding performance summaries: `51 passed`.
 
 ## Next Implementation Slice
 
-The next useful slice should make FEBAMA a complete forecasting workflow rather
-than a precomputed-LPD/MAP kernel:
+The next useful slice should make FEBAMA easier to run on the paper-style S&P
+500 workflow:
 
-1. Extend `forecast.py` from one-step to recursive multi-step forecasting.
-   - update features through the forecast horizon;
-   - compute per-horizon weights.
-2. Add the paper-style S&P 500 scripts.
+1. Add the paper-style S&P 500 scripts.
    - `run_febama_sp500.py`;
    - `prepare_febama_sp500_features.py`;
    - `compare_febama_algorithms.py`.
+2. Add a fast one-origin test fixture for the S&P 500 comparison script.
