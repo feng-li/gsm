@@ -162,14 +162,17 @@ from gsm.febama import (
     LpdFeatures,
     PredictiveDistribution,
     clean_features,
+    compute_lpd_features,
     compute_tsfeatures,
     compute_weights,
     fit_febama,
+    fit_vb,
     forecast_febama,
     log_prob_matrix,
     mase,
     prepare_lpd_features,
     read_precomputed_feature_table,
+    sample_weights,
     score_febama,
     smape,
     standardize_features,
@@ -399,6 +402,8 @@ Implemented:
 - `gsm/febama/forecast.py`.
 - `FebamaForecast` result container.
 - one-step `forecast_febama(...)`.
+- posterior-sampled VB forecast weights, forecasts, and log scores in
+  `forecast_febama(...)`.
 - `mase(...)` and `smape(...)`.
 - focused tests in `tests/test_febama_forecast.py`.
 
@@ -406,7 +411,6 @@ Remaining:
 
 - recursive multi-step forecasting.
 - full `summarize_performance(...)` helper for lists of forecast results.
-- posterior-sampled forecast weights inside `forecast_febama(...)`.
 
 ### Phase 6: S&P 500 Application Scripts - Started
 
@@ -540,13 +544,16 @@ Completed:
 8. Added `scripts/run_febama_example.py`.
 9. Added one-step `forecast_febama(...)` and FEBAMA forecast metrics.
 10. Added FEBAMA mean-field VB and posterior-sampled weights.
+11. Added posterior-sampled VB forecast weights, forecasts, and log scores to
+    `forecast_febama(...)`.
 
 Recent verification:
 
 - `python -m py_compile` passed for the new FEBAMA feature files and example.
 - `python -m pytest tests/test_febama_features.py` passed.
 - Full package suite passed after adding FEBAMA features: `133 passed`.
-- FEBAMA test block passed after adding VB: `45 passed`.
+- FEBAMA test block passed after adding posterior-sampled forecast outputs:
+  `47 passed`.
 
 ## Next Implementation Slice
 
@@ -556,8 +563,7 @@ than a precomputed-LPD/MAP kernel:
 1. Extend `forecast.py` from one-step to recursive multi-step forecasting.
    - update features through the forecast horizon;
    - compute per-horizon weights.
-2. Add posterior-sampled forecast weights/scores to `forecast_febama(...)`.
-3. Add the paper-style S&P 500 scripts.
+2. Add the paper-style S&P 500 scripts.
    - `run_febama_sp500.py`;
    - `prepare_febama_sp500_features.py`;
    - `compare_febama_algorithms.py`.

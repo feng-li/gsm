@@ -8,7 +8,7 @@ from typing import Callable, Iterable
 import numpy as np
 from scipy.special import logsumexp
 
-from gsm.febama.api import compute_weights
+from gsm.febama.api import compute_weights, sample_weights
 from gsm.febama.data import LpdFeatures, SeriesData
 from gsm.febama.distributions import PredictiveDistribution, log_prob_matrix
 from gsm.febama.features import compute_tsfeatures, standardize_features
@@ -27,6 +27,9 @@ class FebamaForecast:
     features: np.ndarray
     predictions: tuple[PredictiveDistribution, ...]
     date: tuple[str, ...] | None = None
+    weight_samples: np.ndarray | None = None
+    forecast_samples: np.ndarray | None = None
+    log_score_samples: np.ndarray | None = None
 
 
 def forecast_febama(
@@ -40,12 +43,17 @@ def forecast_febama(
     feature_window: int | None = None,
     frequency: int | None = 1,
     feature_function: Callable | None = None,
+    n_weight_samples: int = 0,
+    seed: int = 123,
 ) -> FebamaForecast:
     """Produce a one-step FEBAMA forecast from fitted gating coefficients."""
 
     horizon = int(horizon)
     if horizon != 1:
         raise ValueError("only horizon=1 is currently implemented")
+    n_weight_samples = int(n_weight_samples)
+    if n_weight_samples < 0:
+        raise ValueError("n_weight_samples must be nonnegative")
     y, xx, dates = _series_parts(data)
     forecaster_tuple = tuple(forecasters)
     if len(forecaster_tuple) < 2:
@@ -75,6 +83,17 @@ def forecast_febama(
         [np.asarray(prediction.mean(), dtype=float) for prediction in predictions]
     )
     forecast = np.sum(weights * means, axis=1)
+    weight_samples = None
+    forecast_samples = None
+    log_score_samples = None
+    if n_weight_samples > 0 and getattr(fit, "posterior", None) is not None:
+        weight_samples = sample_weights(
+            fit,
+            scaled_features,
+            n_samples=n_weight_samples,
+            seed=seed,
+        )
+        forecast_samples = np.sum(weight_samples * means[None, :, :], axis=2)
 
     actual = None if xx is None else xx[:horizon]
     if xx is not None and actual.shape[0] != horizon:
@@ -87,6 +106,12 @@ def forecast_febama(
         lpd = np.asarray(log_prob_matrix(actual, predictions), dtype=float)
         pointwise = logsumexp(np.log(weights) + lpd, axis=1)
         log_score = float(np.sum(pointwise))
+        if weight_samples is not None:
+            sample_pointwise = logsumexp(
+                np.log(weight_samples) + lpd[None, :, :],
+                axis=2,
+            )
+            log_score_samples = np.sum(sample_pointwise, axis=1)
         mase_value = mase(actual, forecast, y)
         smape_value = smape(actual, forecast)
 
@@ -100,6 +125,9 @@ def forecast_febama(
         features=scaled_features,
         predictions=predictions,
         date=dates,
+        weight_samples=weight_samples,
+        forecast_samples=forecast_samples,
+        log_score_samples=log_score_samples,
     )
 
 

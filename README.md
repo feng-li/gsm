@@ -290,13 +290,13 @@ print(score.total)
 ```
 
 Use `fit_febama(..., fit_method="vb")` and `sample_weights(...)` when posterior
-weight uncertainty is needed.
+weight uncertainty is needed. `forecast_febama(..., n_weight_samples=...)`
+returns posterior-sampled weights, forecasts, and log scores for VB fits.
 
 For live rolling-origin LPD and feature construction, use
 `compute_lpd_features(...)`. The example script `scripts/run_febama_example.py`
 uses that public helper and accepts `--data`, so data paths stay outside the
-FEBAMA config. For one-step forecasting after fitting, use
-`forecast_febama(...)`.
+FEBAMA config. For one-step forecasting after fitting, use `forecast_febama(...)`.
 
 ## Data
 
