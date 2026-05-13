@@ -21,17 +21,30 @@ from gsm.febama import (  # noqa: E402
     compute_lpd_features,
     compute_weights,
     fit_febama,
+    forecast_febama,
     naive_fore,
     prepare_lpd_features,
     rw_drift_fore,
     score_febama,
     standardize_features,
+    summarize_performance,
 )
 
 
 DEFAULT_DATA_PATH = PYTHON_CODE_ROOT / "data" / "sp500_1990-2009_calendar.csv"
 DEFAULT_FEATURES = ("x_acf1", "diff1_acf1", "entropy", "alpha", "beta", "unitroot_kpss")
+FORECASTERS = (naive_fore, rw_drift_fore)
 MODEL_NAMES = ("naive", "rw_drift")
+PERFORMANCE_COLUMNS = (
+    "n_forecasts",
+    "n_scored_forecasts",
+    "total_log_score",
+    "mean_log_score",
+    "mean_mase",
+    "mean_smape",
+    "equal_weight_log_score",
+    "improvement",
+)
 
 
 def main() -> None:
@@ -53,7 +66,7 @@ def main() -> None:
     y, dates = _read_series(args.data, args.value_column, args.date_column)
     lpd_features = compute_lpd_features(
         SeriesData(x=y, date=dates),
-        forecasters=(naive_fore, rw_drift_fore),
+        forecasters=FORECASTERS,
         feature_names=tuple(args.features),
         model_names=MODEL_NAMES,
         start=args.start,
@@ -88,6 +101,19 @@ def main() -> None:
     test_score = score_febama(test_data, fit)
     equal_weight_score = _equal_weight_score(test_raw.lpd)
     weights = compute_weights(fit, test_data.features)
+    forecasts = _forecast_holdout(
+        y,
+        dates,
+        test_raw.origin,
+        test_raw.response,
+        fit,
+        train_clean,
+        FORECASTERS,
+        feature_names=train_clean.feature_names,
+        feature_window=args.feature_window,
+    )
+    performance = summarize_performance(forecasts)
+    performance_row = _performance_row(performance, equal_weight_score)
 
     print(f"data: {args.data}")
     print(f"rows: {y.shape[0]}")
@@ -100,8 +126,15 @@ def main() -> None:
     print(f"requested features: {', '.join(args.features)}")
     print(f"kept features: {', '.join(train_clean.feature_names) or '(intercept only)'}")
     print(f"febama test log score: {test_score.total:.6f}")
+    print(f"forecast total log score: {_format_summary_value(performance.total_log_score)}")
+    print(f"forecast mean log score: {_format_summary_value(performance.mean_log_score)}")
+    print(f"forecast mean MASE: {_format_summary_value(performance.mean_mase)}")
+    print(f"forecast mean sMAPE: {_format_summary_value(performance.mean_smape)}")
     print(f"equal-weight test log score: {equal_weight_score:.6f}")
     print(f"improvement: {test_score.total - equal_weight_score:.6f}")
+    print("performance summary:")
+    print(",".join(PERFORMANCE_COLUMNS))
+    print(",".join(_format_summary_value(performance_row[name]) for name in PERFORMANCE_COLUMNS))
     print("average held-out weights:")
     for name, weight in zip(MODEL_NAMES, np.asarray(weights).mean(axis=0), strict=True):
         print(f"  {name}: {weight:.4f}")
@@ -158,6 +191,77 @@ def _slice_lpd_features(lpd_features, rows):
         if lpd_features.date is None
         else tuple(lpd_features.date[int(i)] for i in indices),
     )
+
+
+def _forecast_holdout(
+    y: np.ndarray,
+    dates: tuple[str, ...],
+    origins,
+    response,
+    fit,
+    lpd_features,
+    forecasters,
+    *,
+    feature_names,
+    feature_window: int | None,
+    frequency: int | None = 1,
+    feature_function=None,
+):
+    if origins is None or response is None:
+        raise ValueError("holdout origins and responses are required")
+    forecasts = []
+    for origin, actual in zip(origins, response, strict=True):
+        origin = int(origin)
+        history_dates = None
+        if dates is not None and len(dates) > origin:
+            history_dates = tuple(dates[: origin + 1])
+        forecasts.append(
+            forecast_febama(
+                SeriesData(
+                    x=y[:origin],
+                    xx=np.asarray([actual], dtype=float),
+                    date=history_dates,
+                ),
+                fit,
+                lpd_features,
+                forecasters=forecasters,
+                feature_names=feature_names,
+                horizon=1,
+                feature_window=feature_window,
+                frequency=frequency,
+                feature_function=feature_function,
+            )
+        )
+    return tuple(forecasts)
+
+
+def _performance_row(
+    performance,
+    equal_weight_score: float,
+) -> dict[str, float | int | None]:
+    improvement = (
+        None
+        if performance.total_log_score is None
+        else performance.total_log_score - equal_weight_score
+    )
+    return {
+        "n_forecasts": performance.n_forecasts,
+        "n_scored_forecasts": performance.n_scored_forecasts,
+        "total_log_score": performance.total_log_score,
+        "mean_log_score": performance.mean_log_score,
+        "mean_mase": performance.mean_mase,
+        "mean_smape": performance.mean_smape,
+        "equal_weight_log_score": equal_weight_score,
+        "improvement": improvement,
+    }
+
+
+def _format_summary_value(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    return f"{float(value):.6f}"
 
 
 def _equal_weight_score(lpd: np.ndarray) -> float:

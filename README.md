@@ -303,7 +303,8 @@ For live rolling-origin LPD and feature construction, use
 `compute_lpd_features(...)`. The example script `scripts/run_febama_example.py`
 uses that public helper and accepts `--data`, so data paths stay outside the
 FEBAMA config. For recursive forecasting after fitting, use `forecast_febama(...)`.
-Use `summarize_performance(...)` to aggregate a list of forecast results.
+Use `summarize_performance(...)` to aggregate a list of forecast results; the
+example script prints the same compact performance-summary row.
 
 ## Data
 

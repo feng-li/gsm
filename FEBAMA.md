@@ -444,6 +444,11 @@ Implemented:
 - `scripts/run_febama_example.py` demonstrates a minimal rolling S&P 500
   workflow with `tsfeatures`, `naive_fore`, `rw_drift_fore`, MAP fitting, and
   held-out log-score comparison against equal weights.
+- `scripts/run_febama_example.py` now reports a `summarize_performance(...)`
+  table row for holdout forecasts.
+- `tests/test_febama_scripts.py` covers a fast one-origin S&P-style workflow
+  with `naive_fore` and `rw_drift_fore`, finite scores, and stable output
+  columns.
 - `README.md` now introduces `gsm.febama` and the example command.
 
 Remaining:
@@ -500,6 +505,7 @@ Current Python FEBAMA tests:
 - `tests/test_febama_forecast.py`
 - `tests/test_febama_forecasters.py`
 - `tests/test_febama_inference.py`
+- `tests/test_febama_scripts.py`
 - `tests/test_febama_scoring.py`
 
 ## Risks and Decisions
@@ -539,13 +545,15 @@ Completed:
     `forecast_febama(...)`.
 12. Added recursive multi-step `forecast_febama(...)`.
 13. Added `summarize_performance(...)` for lists of forecast results.
+14. Added a fast one-origin FEBAMA script test and performance-summary output
+    for `scripts/run_febama_example.py`.
 
 Recent verification:
 
 - `python -m py_compile` passed for the new FEBAMA feature files and example.
 - `python -m pytest tests/test_febama_features.py` passed.
 - Full package suite passed after adding FEBAMA features: `133 passed`.
-- FEBAMA test block passed after adding performance summaries: `51 passed`.
+- FEBAMA test block passed after adding the one-origin script test: `52 passed`.
 
 ## Next Implementation Slice
 
@@ -556,4 +564,5 @@ The next useful slice should make FEBAMA easier to run on the paper-style S&P
    - `run_febama_sp500.py`;
    - `prepare_febama_sp500_features.py`;
    - `compare_febama_algorithms.py`.
-2. Add a fast one-origin test fixture for the S&P 500 comparison script.
+2. Add a comparison-script fixture against the R output shape once
+   `compare_febama_algorithms.py` exists.
