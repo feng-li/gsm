@@ -37,10 +37,10 @@ from gsm.febama.forecast import (
     summarize_performance,
 )
 from gsm.febama.features import (
-    SP500_TABLE3_FEATURES,
     PrecomputedFeatureTable,
     clean_features,
     compute_tsfeatures,
+    feature_table,
     read_precomputed_feature_table,
     standardize_features,
 )
@@ -69,7 +69,6 @@ __all__ = [
     "LpdFeatures",
     "PredictiveDistribution",
     "PrecomputedFeatureTable",
-    "SP500_TABLE3_FEATURES",
     "SeriesData",
     "available_distributions",
     "active_beta_vector",
@@ -80,6 +79,7 @@ __all__ = [
     "compute_weights",
     "egarch_fore",
     "ets_fore",
+    "feature_table",
     "fit_febama",
     "fit_map",
     "fit_vb",

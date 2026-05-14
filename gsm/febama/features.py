@@ -12,7 +12,7 @@ import numpy as np
 from gsm.febama.data import LpdFeatures
 
 
-SP500_TABLE3_FEATURES: tuple[str, ...] = (
+feature_table: tuple[str, ...] = (
     "alpha",
     "arch_acf",
     "arch_r2",

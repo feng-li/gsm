@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 
 from gsm.febama import (
-    SP500_TABLE3_FEATURES,
     clean_features,
     compute_tsfeatures,
+    feature_table,
     read_precomputed_feature_table,
     standardize_features,
 )
@@ -109,10 +109,10 @@ def test_read_precomputed_feature_table_uses_explicit_schema(tmp_path):
     np.testing.assert_allclose(table.lpd_features.lpd, np.asarray([[-1.0, -2.0], [-0.5, -1.5]]))
 
 
-def test_sp500_table3_features_are_available_as_schema_constant():
-    assert "x_acf1" in SP500_TABLE3_FEATURES
-    assert "entropy" in SP500_TABLE3_FEATURES
-    assert len(SP500_TABLE3_FEATURES) == 15
+def test_feature_table_is_available_as_schema():
+    assert "x_acf1" in feature_table
+    assert "entropy" in feature_table
+    assert len(feature_table) == 15
 
 
 @pytest.mark.skipif(

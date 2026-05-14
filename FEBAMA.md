@@ -300,7 +300,7 @@ Implemented:
   feature, response, date/origin, and optional LPD columns.
 - `compute_tsfeatures(...)` wraps the installed Python `tsfeatures` package for
   one time series.
-- `SP500_TABLE3_FEATURES` stores the 15 stock-market feature names from the R
+- `feature_table` stores the 15 stock-market feature names from the R
   S&P 500 example.
 - `compute_lpd_features(...)` builds rolling component LPDs and feature rows
   from a series, a forecaster list, live feature functions, or precomputed
