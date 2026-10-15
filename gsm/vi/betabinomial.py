@@ -248,11 +248,20 @@ def fit_betabin_mixture_vb(
     """Fit the beta-binomial mixture scaffold with JAX gradients and Adam."""
 
     fit = fit or FitConfig()
-    inputs = prepare_betabin_mixture_inputs(dataset, setting)
+    standardization = fit_betabin_mixture_standardization(dataset, setting)
+    inputs = prepare_betabin_mixture_inputs(dataset, setting, standardization)
     coefficient_priors = build_betabin_mixture_priors(inputs, setting)
     return fit_mean_field_mixture_vb(
         fit=fit,
         inputs=inputs,
+        standardization=standardization,
+        predict_moments=lambda tree: betabin_predict_mean_variance(
+            tree_to_betabin_params(tree),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_dispersion),
+            jnp.asarray(inputs.Z),
+            trials=inputs.y,
+        ),
         initialize_variational_params=lambda: initialize_betabin_mixture_variational_params(
             inputs,
             setting,

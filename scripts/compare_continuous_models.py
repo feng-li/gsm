@@ -220,7 +220,7 @@ def _run_model(
         train_rows=heldout.train_indices.shape[0],
         test_rows=heldout.test_indices.shape[0],
         components=spec.setting.n_components,
-        iterations=len(history),
+        iterations=heldout.train_result.n_iter,
         converged=heldout.train_result.converged,
         initial_objective=float(history[0]),
         final_objective=float(history[-1]),

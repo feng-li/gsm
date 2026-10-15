@@ -21,6 +21,7 @@ from gsm.priors import (
 from gsm.vi.common import (
     VariationalResult,
     fit_design_standardization,
+    guard_studentt_moments,
     standardize_designs,
 )
 from gsm.vi.engine import (
@@ -259,11 +260,23 @@ def fit_studentt_mixture_vb(
     """Fit the Student-t mixture scaffold with JAX gradients and local Adam."""
 
     fit = fit or FitConfig()
-    inputs = prepare_studentt_mixture_inputs(dataset, setting)
+    standardization = fit_studentt_mixture_standardization(dataset, setting)
+    inputs = prepare_studentt_mixture_inputs(dataset, setting, standardization)
     coefficient_priors = build_studentt_mixture_priors(inputs, setting)
     return fit_mean_field_mixture_vb(
         fit=fit,
         inputs=inputs,
+        standardization=standardization,
+        moment_policy=lambda posterior, mean, variance: guard_studentt_moments(
+            posterior, inputs.X_df, mean, variance,
+        ),
+        predict_moments=lambda tree: studentt_predict_mean_variance(
+            tree_to_studentt_params(tree),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_df),
+            jnp.asarray(inputs.X_scale),
+            jnp.asarray(inputs.Z),
+        ),
         initialize_variational_params=lambda: initialize_studentt_mixture_variational_params(
             inputs,
             setting,

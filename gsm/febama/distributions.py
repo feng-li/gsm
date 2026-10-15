@@ -152,6 +152,11 @@ def _studentt_variance(params):
     return jnp.where(df > 2.0, df / (df - 2.0) * scale**2, jnp.nan)
 
 
+def _studentt_mean(params):
+    df = _positive(_param_column(params, "df"))
+    return jnp.where(df > 1.0, _param_column(params, "mean"), jnp.nan)
+
+
 def _splitnormal_mean(params):
     mean = _param_column(params, "mean")
     scale = _scale(params)
@@ -289,7 +294,7 @@ register_distribution(
 )
 register_distribution(
     "studentt",
-    DistributionSpec(_studentt_log_prob, _identity_mean, _studentt_variance),
+    DistributionSpec(_studentt_log_prob, _studentt_mean, _studentt_variance),
 )
 register_distribution(
     "splitnormal",

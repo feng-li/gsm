@@ -17,6 +17,48 @@ class VariationalResult:
     responsibilities: np.ndarray | None = None
     predictive_mean: np.ndarray | None = None
     predictive_variance: np.ndarray | None = None
+    standardization: Any | None = None
+    n_predictive_samples: int = 0
+    validation_elbo: float | None = None
+    elbo_mc_error: float | None = None
+    n_iter: int = 0
+    best_iteration: int = 0
+    termination_reason: str = ""
+    elbo_iterations: np.ndarray | None = None
+    predictive_moment_warning: str | None = None
+
+
+def _uncertain_predictor(posterior, design, coefficient):
+    log_std = np.asarray(getattr(posterior.log_std, coefficient))
+    return np.any(
+        (np.asarray(design)[:, None, :] != 0.0) & np.isfinite(log_std)[None, :, :], axis=2,
+    )
+
+
+def guard_studentt_moments(posterior, X_df, mean, variance):
+    """Gaussian log-DF uncertainty has positive mass below every DF threshold."""
+
+    uncertain = _uncertain_predictor(posterior, X_df, "df_coef")
+    log_df = np.asarray(X_df) @ np.asarray(posterior.mean.df_coef).T
+    mean_exists = np.all(~uncertain & (log_df > 0.0), axis=1)
+    variance_exists = np.all(~uncertain & (log_df > np.log(2.0)), axis=1)
+    warning = None
+    if not np.all(mean_exists & variance_exists):
+        warning = "Student-t predictive moments do not exist under the log-DF posterior support."
+    return np.where(mean_exists, mean, np.nan), np.where(variance_exists, variance, np.nan), warning
+
+
+def guard_lognormal_moments(posterior, X_mean, X_scale, mean, variance):
+    """Standard LogNorm has divergent double-exponential Gaussian moments."""
+
+    divergent = np.any(
+        _uncertain_predictor(posterior, X_mean, "mean_coef")
+        | _uncertain_predictor(posterior, X_scale, "scale_coef"), axis=1,
+    )
+    warning = None
+    if np.any(divergent):
+        warning = "Standard LogNorm predictive moments are infinite; use response parameterization."
+    return np.where(divergent, np.inf, mean), np.where(divergent, np.inf, variance), warning
 
 
 def apply_standardization(

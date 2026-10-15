@@ -87,7 +87,8 @@ So `gating_coef` has shape `(n_components - 1, n_cov_mix)`. With one component,
   - `Mean`: identity link; component normal mean `mu`.
   - `Variance`: log link; component variance `sigma2`.
 - Density: `Normal(mu, sigma2)`.
-- Predictive moments use the standard mixture mean and second moment.
+- Predictive variance uses within-component variance plus centered squared
+  deviations, avoiding cancellation of large second moments.
 - Default S&P 500 setting uses an intercept-only mean, covariate-dependent
   variance, and covariate-dependent gating.
 
@@ -120,6 +121,9 @@ So `gating_coef` has shape `(n_components - 1, n_cov_mix)`. With one component,
   feature named `Mean` is passed as the lognormal location and `Scale` is the
   lognormal scale.
 - Predictive component mean is `exp(location + 0.5 * scale^2)`.
+- With nondegenerate Gaussian coefficient uncertainty on location/scale
+  predictors, posterior predictive moments diverge. VB reports `Inf` and a
+  `predictive_moment_warning`; LogNormRep avoids this double-exponential issue.
 
 ### Response-Scale Lognormal / `LogNormRep`
 
@@ -171,6 +175,9 @@ So `gating_coef` has shape `(n_components - 1, n_cov_mix)`. With one component,
   - `Scale`: log link; scale `sigma`.
 - Component variance is available only when `nu > 2`:
   `nu / (nu - 2) * sigma^2`.
+- A Gaussian log-DF posterior assigns positive mass below both moment
+  thresholds. Student-t and split-t VB therefore report undefined posterior
+  moments as `NaN`, even if a finite sample misses that tail region.
 
 ### Split Normal / `AsymNorm`
 

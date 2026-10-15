@@ -56,7 +56,10 @@ def main() -> None:
     print(f"components: {MODEL.n_components}")
     print(f"ard: {fit.use_ard}")
     print(f"elbo samples: {fit.n_elbo_samples}")
-    print(f"iterations: {len(result.elbo_history)}")
+    print(f"iterations: {result.n_iter}")
+    print(f"termination: {result.termination_reason}")
+    if result.predictive_moment_warning:
+        print(f"predictive moments: {result.predictive_moment_warning}")
     print(f"converged: {result.converged}")
     print(f"initial objective: {result.elbo_history[0]:.6f}")
     print(f"final objective: {result.elbo_history[-1]:.6f}")

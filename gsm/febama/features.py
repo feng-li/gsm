@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import inspect
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -75,6 +76,7 @@ def clean_features(lpd_features: LpdFeatures, drop_constant: bool = True) -> Lpd
         feature_names=tuple(np.asarray(names, dtype=object)[keep].tolist()),
         origin=lpd_features.origin,
         date=lpd_features.date,
+        lead=lpd_features.lead,
     )
 
 
@@ -127,6 +129,9 @@ def compute_tsfeatures(
         raise ValueError("y must contain at least one observation")
     if not np.all(np.isfinite(values)):
         raise ValueError("y must contain only finite values")
+    requested = None if feature_names is None else tuple(feature_names)
+    if requested == ():
+        return {}
 
     try:
         import pandas as pd
@@ -136,27 +141,64 @@ def compute_tsfeatures(
             "tsfeatures is required for compute_tsfeatures; install gsm[febama]."
         ) from exc
 
-    ts = pd.DataFrame(
-        {
-            "unique_id": "series_0",
-            "ds": np.arange(values.size, dtype=int),
-            "y": values,
-        }
-    )
-    kwargs = {"freq": frequency, "scale": scale, "threads": threads}
-    if feature_functions is not None:
-        kwargs["features"] = list(feature_functions)
-    row = tsfeatures.tsfeatures(ts, **kwargs).iloc[0].to_dict()
+    functions = (list(feature_functions) if feature_functions is not None
+                 else _requested_feature_functions(tsfeatures, requested))
+    if threads == 1 and frequency is not None:
+        from tsfeatures.utils import scalets
+
+        scaled = scalets(values) if scale else values
+        row = {}
+        for function in functions:
+            for name, value in function(scaled, frequency).items():
+                row.setdefault(name, value)
+    else:
+        ts = pd.DataFrame(
+            {
+                "unique_id": "series_0",
+                "ds": np.arange(values.size, dtype=int),
+                "y": values,
+            }
+        )
+        row = tsfeatures.tsfeatures(
+            ts, freq=frequency, scale=scale, threads=threads, features=functions,
+        ).iloc[0].to_dict()
     row.pop("unique_id", None)
     out = {name: float(value) for name, value in row.items() if _is_number(value)}
 
-    if feature_names is None:
+    if requested is None:
         return out
-    requested = tuple(feature_names)
     missing = [name for name in requested if name not in out]
     if missing:
         raise ValueError(f"missing tsfeatures columns: {missing}")
     return {name: out[name] for name in requested}
+
+
+def _requested_feature_functions(module, names):
+    if names is None:
+        return list(inspect.signature(module.tsfeatures).parameters["features"].default)
+    groups = {
+        "acf_features": ("x_acf1", "x_acf10", "diff1_acf1", "diff1_acf10",
+                         "diff2_acf1", "diff2_acf10", "seas_acf1"),
+        "pacf_features": ("x_pacf5", "diff1x_pacf5", "diff2x_pacf5", "seas_pacf"),
+        "heterogeneity": ("arch_acf", "garch_acf", "arch_r2", "garch_r2"),
+        "holt_parameters": ("alpha", "beta"),
+        "hw_parameters": ("hw_alpha", "hw_beta", "hw_gamma"),
+        "stl_features": ("nperiods", "seasonal_period", "trend", "spike", "linearity",
+                         "curvature", "e_acf1", "e_acf10", "seasonal_strength", "peak", "trough"),
+        "arch_stat": ("arch_lm",),
+        "intervals": ("intervals_mean", "intervals_sd"),
+        "statistics": ("total_sum", "mean", "variance", "median", "p2point5", "p5",
+                       "p25", "p75", "p95", "p97point5", "max", "min"),
+    }
+    owners = {name: function for function, outputs in groups.items() for name in outputs}
+    functions = []
+    for name in names:
+        function = getattr(module, owners.get(name, name), None)
+        if not callable(function):
+            raise ValueError(f"unknown tsfeatures column: {name}; supply feature_functions")
+        if function not in functions:
+            functions.append(function)
+    return functions
 
 
 def read_precomputed_feature_table(

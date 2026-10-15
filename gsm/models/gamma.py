@@ -8,7 +8,7 @@ from jax.nn import logsumexp
 from jax.scipy.special import gammaln
 
 from gsm.links import inverse_link
-from gsm.models.mixture import log_mixture_weights
+from gsm.models.mixture import log_mixture_weights, mixture_moments
 
 GammaParameterization = Literal["mean_variance", "shape_scale"]
 
@@ -143,10 +143,7 @@ def predict_mean_variance(
         raise ValueError(f"unknown gamma parameterization: {parameterization}")
 
     weights = jnp.exp(log_mixture_weights(params.gating_coef, Z))
-    pred_mean = jnp.sum(weights * component_mean, axis=1)
-    pred_second = jnp.sum(weights * (component_variance + component_mean**2), axis=1)
-    pred_variance = pred_second - pred_mean**2
-    return pred_mean, pred_variance
+    return mixture_moments(weights, component_mean, component_variance)
 
 
 def _positive(value):

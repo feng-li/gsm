@@ -108,6 +108,29 @@ def test_febama_sample_weights_requires_vb_fit():
         sample_weights(fit, lpd_features, n_samples=2)
 
 
+def test_vb_scores_integrate_densities_and_weights():
+    from gsm.febama.api import FebamaFit
+    from gsm.febama.inference import FebamaVbPosterior
+    from scipy.integrate import quad
+    from scipy.special import expit
+    from scipy.stats import norm
+
+    posterior = FebamaVbPosterior(np.array([[2.]]), np.log(np.array([[3.]])),
+                                 np.ones((1, 1), dtype=bool))
+    fit = FebamaFit("vb", posterior.mean, True, None, posterior)
+    data = prepare_lpd_features(np.array([[0., -5.]]), np.empty((1, 0)))
+    score = score_febama(data, fit, n_samples=8192, seed=7)
+    weights = compute_weights(fit, data.features, n_samples=8192, seed=7)
+    expected_weight = quad(lambda z: expit(2 + 3*z) * norm.pdf(z), -12, 12)[0]
+    expected_score = np.log(expected_weight + (1-expected_weight)*np.exp(-5))
+    np.testing.assert_allclose(score.total, expected_score, atol=.02)
+    np.testing.assert_allclose(score.total, np.log(weights[0, 0]+weights[0, 1]*np.exp(-5)))
+    assert score.n_posterior_samples == 8192
+    plugin = score_febama(data, fit, n_samples=0)
+    assert plugin.n_posterior_samples == 0
+    assert abs(plugin.total-score.total) > .1
+
+
 def test_febama_compute_lpd_features_builds_rolling_training_data():
     y = np.linspace(1.0, 2.0, 12)
     dates = tuple(f"date-{idx}" for idx in range(y.shape[0]))
@@ -176,3 +199,88 @@ def _zero_beta_score(lpd_features):
 def _simple_features(history):
     history = np.asarray(history, dtype=float)
     return {"last": history[-1], "mean": float(np.mean(history))}
+
+
+def test_multistep_training_scores_the_same_marginals_as_forecasting():
+    from gsm.febama import PredictiveDistribution, clean_features, forecast_febama
+
+    def negative(history, horizon):
+        return PredictiveDistribution("gaussian", {"mean": np.full(horizon, -1.), "sd": .25})
+
+    def positive(history, horizon):
+        return PredictiveDistribution("gaussian", {"mean": np.full(horizon, 1.), "sd": .25})
+
+    history, actual = np.array([0., 1., 2.]), np.array([-1., 1.])
+    data = compute_lpd_features(
+        np.r_[history, actual], (negative, positive), ("x",), start=3, horizon=2,
+        precomputed_features=np.zeros((1, 1)),
+    )
+    np.testing.assert_array_equal(data.origin, [3, 3])
+    np.testing.assert_array_equal(data.lead, [1, 2])
+    np.testing.assert_array_equal(data.response, actual)
+    assert data.lpd.shape == (2, 2)
+    clean = clean_features(data)
+    fit = fit_febama(clean, active_mask=np.zeros((1, 1), dtype=bool))
+    forecast = forecast_febama(
+        SeriesData(history, actual), fit, clean, (negative, positive), horizon=2,
+        feature_names=("x",), feature_function=lambda y: {"x": 0.},
+    )
+    np.testing.assert_allclose(score_febama(clean, fit).total, forecast.log_score)
+
+
+def test_named_columns_are_aligned_to_the_fit():
+    from dataclasses import replace
+
+    data = prepare_lpd_features(
+        [[0., -2.], [-1., 0.], [0., -1.]], [[1., 0.], [0., 1.], [2., 3.]],
+        model_names=("a", "b"), feature_names=("x", "z"),
+    )
+    fit = fit_febama(data)
+    swapped = replace(
+        data, features=data.features[:, ::-1], feature_names=("z", "x"),
+        lpd=data.lpd[:, ::-1], model_names=("b", "a"),
+    )
+    np.testing.assert_allclose(score_febama(data, fit).pointwise, score_febama(swapped, fit).pointwise)
+    np.testing.assert_allclose(compute_weights(fit, data), compute_weights(fit, swapped))
+    with pytest.raises(ValueError, match="model names"):
+        score_febama(replace(data, model_names=("a", "unknown")), fit)
+    with pytest.raises(ValueError, match="feature names"):
+        compute_weights(fit, replace(data, feature_names=("x", "unknown")))
+
+
+def test_fitted_scaling_is_preserved_and_checked():
+    from dataclasses import replace
+    from gsm.febama import clean_features
+
+    data = clean_features(_workflow_data())
+    fit = fit_febama(data)
+    np.testing.assert_array_equal(fit.feature_mean, data.feature_mean)
+    np.testing.assert_array_equal(fit.feature_sd, data.feature_sd)
+    with pytest.raises(ValueError, match="scaling"):
+        compute_weights(fit, replace(data, feature_mean=data.feature_mean + 1.))
+
+
+def test_posterior_weight_kernel_is_compiled_once(monkeypatch):
+    import jax
+    import gsm.febama.api as api
+    from gsm.febama.inference import FebamaVbPosterior
+
+    traces = []
+
+    @jax.jit
+    def kernel(beta, features):
+        traces.append(True)
+        return jax.vmap(api.log_weights, in_axes=(0, None))(beta, features)
+
+    monkeypatch.setattr(api, "_sample_log_weights", kernel)
+    posterior = FebamaVbPosterior(np.zeros((1, 2)), np.full((1, 2), -2.), np.ones((1, 2), bool))
+    fit = api.FebamaFit("vb", posterior.mean, True, None, posterior)
+    for _ in range(3):
+        sample_weights(fit, np.ones((3, 1)), n_samples=8)
+    assert len(traces) == 1
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf])
+def test_lpd_container_rejects_contaminating_values(bad):
+    with pytest.raises(ValueError, match="NaN or positive infinity"):
+        prepare_lpd_features([[0., bad]], [[1.]])

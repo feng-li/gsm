@@ -126,3 +126,24 @@ def test_compute_tsfeatures_uses_installed_package_for_requested_columns():
 
     assert set(features) == {"x_acf1", "entropy"}
     assert np.isfinite(list(features.values())).all()
+
+
+@pytest.mark.skipif(importlib.util.find_spec("tsfeatures") is None, reason="tsfeatures missing")
+def test_requested_features_skip_unrelated_functions_and_process_pool(monkeypatch):
+    import tsfeatures
+    from tsfeatures.utils import scalets
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("unrequested extraction or process pool was used")
+
+    monkeypatch.setattr(tsfeatures, "heterogeneity", unexpected)
+    monkeypatch.setattr(tsfeatures, "tsfeatures", unexpected)
+    y = np.sin(np.arange(40) / 3.)
+    actual = compute_tsfeatures(y, feature_names=("x_acf1", "x_acf10"))
+    expected = tsfeatures.acf_features(scalets(y), 1)
+    for name, value in actual.items():
+        np.testing.assert_allclose(value, expected[name])
+
+
+def test_empty_feature_selection_needs_no_extraction():
+    assert compute_tsfeatures([1., 2., 3.], feature_names=()) == {}

@@ -62,3 +62,43 @@ def test_run_febama_example_fast_one_origin_summary_columns_are_finite():
 def _simple_features(history):
     history = np.asarray(history, dtype=float)
     return {"last": history[-1], "mean": float(np.mean(history))}
+
+
+def test_example_reuses_cached_forecasts_and_features():
+    calls = {"expert": 0, "features": 0}
+
+    def expert(y, horizon):
+        calls["expert"] += 1
+        return FORECASTERS[0](y, horizon)
+
+    def features(y):
+        calls["features"] += 1
+        return dict(_simple_features(y), constant=1.)
+
+    cache = {}
+    y = np.sin(np.arange(12.))
+    data = compute_lpd_features(
+        y, (expert, expert), ("last", "mean", "constant"), model_names=MODEL_NAMES,
+        start=5, max_origins=4, feature_window=3, feature_function=features, forecast_cache=cache,
+    )
+    train, test = _train_test_split(data, 1)
+    train = clean_features(train)
+    fit = fit_febama(train)
+    before = calls.copy()
+    forecasts = _forecast_holdout(
+        y, None, test.origin, test.response, fit, train, (expert, expert),
+        feature_names=train.feature_names, feature_window=3, feature_function=features,
+        forecast_cache=cache, raw_feature_names=data.feature_names,
+    )
+    assert calls == before
+    np.testing.assert_allclose(forecasts[0].lpd, test.lpd)
+
+
+def test_multistep_holdout_keeps_training_targets_before_test_origin():
+    data = compute_lpd_features(
+        np.sin(np.arange(14.)), FORECASTERS, ("last", "mean"),
+        start=3, max_origins=7, horizon=3, feature_function=_simple_features,
+    )
+    train, test = _train_test_split(data, 2)
+    assert np.max(train.origin + train.lead - 1) < np.min(test.origin)
+    assert len(np.unique(test.origin)) == 2

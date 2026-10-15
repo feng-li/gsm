@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import jax.numpy as jnp
+from jax.nn import sigmoid
 
 
 def link(value, link_type: str | float):
@@ -41,7 +42,7 @@ def inverse_link(eta, link_type: str | float):
     if name == "log":
         return jnp.exp(eta)
     if name == "logit":
-        return 1.0 / (1.0 + jnp.exp(-eta))
+        return sigmoid(eta)
     if name == "loglog":
         return jnp.exp(-jnp.exp(eta))
     if name in {"comploglog", "cloglog"}:

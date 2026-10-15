@@ -8,7 +8,12 @@ from typing import Callable, Iterable
 import numpy as np
 from scipy.special import logsumexp
 
-from gsm.febama.api import compute_weights, sample_weights
+from gsm.febama.api import (
+    _check_scaling,
+    _column_order,
+    compute_log_weights,
+    sample_log_weights,
+)
 from gsm.febama.data import LpdFeatures, SeriesData
 from gsm.febama.distributions import PredictiveDistribution, log_prob_matrix
 from gsm.febama.features import compute_tsfeatures, standardize_features
@@ -59,8 +64,15 @@ def forecast_febama(
     feature_function: Callable | None = None,
     n_weight_samples: int = 0,
     seed: int = 123,
+    model_names: Iterable[str] | None = None,
+    predictions: Iterable[PredictiveDistribution] | None = None,
+    precomputed_features=None,
 ) -> FebamaForecast:
-    """Produce a recursive FEBAMA forecast from fitted gating coefficients."""
+    """Combine expert horizon marginals using features known at the origin.
+
+    Gating features are held fixed across the horizon. Future forecast means
+    are never appended to the observed series or used to refit expert models.
+    """
 
     horizon = int(horizon)
     if horizon < 1:
@@ -68,12 +80,20 @@ def forecast_febama(
     n_weight_samples = int(n_weight_samples)
     if n_weight_samples < 0:
         raise ValueError("n_weight_samples must be nonnegative")
+    if feature_window is not None and int(feature_window) < 2:
+        raise ValueError("feature_window must be at least two")
     y, xx, dates = _series_parts(data)
     forecaster_tuple = tuple(forecasters)
     if len(forecaster_tuple) < 2:
         raise ValueError("at least two forecasters are required")
     if lpd_features.feature_mean is None or lpd_features.feature_sd is None:
         raise ValueError("lpd_features must be cleaned before forecasting")
+    feature_order = _column_order(lpd_features.feature_names, fit.feature_names, "feature")
+    _check_scaling(fit, lpd_features, feature_order)
+    names = tuple(model_names) if model_names is not None else tuple(
+        getattr(forecaster, "__name__", "") for forecaster in forecaster_tuple
+    )
+    model_order = _column_order(names, fit.model_names, "model")
 
     raw_feature_names = (
         tuple(feature_names) if feature_names is not None else lpd_features.feature_names
@@ -81,59 +101,46 @@ def forecast_febama(
     if raw_feature_names is None:
         raise ValueError("feature_names are required")
 
-    recursive_history = np.asarray(y, dtype=float)
-    feature_rows = []
-    weight_rows = []
-    mean_rows = []
-    step_predictions = []
-    forecast_values = []
-    for _ in range(horizon):
-        history = (
-            recursive_history
-            if feature_window is None
-            else recursive_history[-int(feature_window) :]
-        )
+    history = y if feature_window is None else y[-int(feature_window):]
+    if precomputed_features is None:
         raw_features = _feature_row(history, raw_feature_names, feature_function, frequency)
-        scaled_step = standardize_features(
-            raw_features,
-            lpd_features.feature_mean,
-            lpd_features.feature_sd,
-            feature_names=raw_feature_names,
-            reference_feature_names=lpd_features.feature_names,
-        )
-        weights_step = compute_weights(fit, scaled_step)
-        predictions_step = tuple(
-            forecaster(recursive_history, 1) for forecaster in forecaster_tuple
-        )
-        means_step = np.asarray(
-            [_one_step_mean(prediction) for prediction in predictions_step],
-            dtype=float,
-        ).reshape((1, -1))
-        forecast_step = float(np.sum(weights_step * means_step, axis=1)[0])
-
-        feature_rows.append(scaled_step)
-        weight_rows.append(weights_step)
-        mean_rows.append(means_step)
-        step_predictions.append(predictions_step)
-        forecast_values.append(forecast_step)
-        recursive_history = np.append(recursive_history, forecast_step)
-
-    scaled_features = np.vstack(feature_rows)
-    weights = np.vstack(weight_rows)
-    means = np.vstack(mean_rows)
-    forecast = np.asarray(forecast_values, dtype=float)
-    predictions = _stack_predictions(step_predictions)
+    else:
+        raw_features = np.asarray(precomputed_features, dtype=float).reshape((1, -1))
+        if raw_features.shape[1] != len(raw_feature_names):
+            raise ValueError("precomputed_features columns must match feature_names")
+    scaled_origin = standardize_features(
+        raw_features, lpd_features.feature_mean, lpd_features.feature_sd,
+        feature_names=raw_feature_names,
+        reference_feature_names=lpd_features.feature_names,
+    )
+    scaled_features = np.repeat(scaled_origin, horizon, axis=0)
+    if feature_order is not None:
+        scaled_features = scaled_features[:, feature_order]
+    predictions = (tuple(forecaster(y, horizon) for forecaster in forecaster_tuple)
+                   if predictions is None else tuple(predictions))
+    if len(predictions) != len(forecaster_tuple):
+        raise ValueError("predictions must match the number of forecasters")
+    if model_order is not None:
+        predictions = tuple(predictions[idx] for idx in model_order)
+    means = np.column_stack([_horizon_means(prediction, horizon) for prediction in predictions])
     weight_samples = None
     forecast_samples = None
     log_score_samples = None
     if n_weight_samples > 0 and getattr(fit, "posterior", None) is not None:
-        weight_samples = sample_weights(
+        log_weight_samples = sample_log_weights(
             fit,
             scaled_features,
             n_samples=n_weight_samples,
             seed=seed,
         )
+        weight_samples = np.exp(log_weight_samples)
+        log_w = logsumexp(log_weight_samples, axis=0) - np.log(n_weight_samples)
+        weights = np.exp(log_w)
         forecast_samples = np.sum(weight_samples * means[None, :, :], axis=2)
+    else:
+        log_w = compute_log_weights(fit, scaled_features, seed=seed)
+        weights = np.exp(log_w)
+    forecast = np.sum(weights * means, axis=1)
 
     actual = None if xx is None else xx[:horizon]
     if xx is not None and actual.shape[0] != horizon:
@@ -144,13 +151,10 @@ def forecast_febama(
     smape_value = None
     if actual is not None:
         lpd = np.asarray(log_prob_matrix(actual, predictions), dtype=float)
-        pointwise = logsumexp(np.log(weights) + lpd, axis=1)
+        pointwise = logsumexp(log_w + lpd, axis=1)
         log_score = float(np.sum(pointwise))
         if weight_samples is not None:
-            sample_pointwise = logsumexp(
-                np.log(weight_samples) + lpd[None, :, :],
-                axis=2,
-            )
+            sample_pointwise = logsumexp(log_weight_samples + lpd[None, :, :], axis=2)
             log_score_samples = np.sum(sample_pointwise, axis=1)
         mase_value = mase(actual, forecast, y)
         smape_value = smape(actual, forecast)
@@ -312,43 +316,12 @@ def _sample_log_score_summary(
     return np.sum(matrix, axis=0), np.mean(matrix, axis=0)
 
 
-def _one_step_mean(prediction: PredictiveDistribution) -> float:
+def _horizon_means(prediction: PredictiveDistribution, horizon: int) -> np.ndarray:
     values = np.asarray(prediction.mean(), dtype=float).reshape((-1,))
-    if values.shape != (1,):
-        raise ValueError("forecasters must return one-step predictions")
-    if not np.isfinite(values[0]):
+    if values.size == 1:
+        values = np.repeat(values, horizon)
+    if values.shape != (horizon,):
+        raise ValueError("forecaster means must match the forecast horizon")
+    if not np.all(np.isfinite(values)):
         raise ValueError("forecaster means must be finite")
-    return float(values[0])
-
-
-def _stack_predictions(
-    step_predictions: list[tuple[PredictiveDistribution, ...]],
-) -> tuple[PredictiveDistribution, ...]:
-    """Combine recursive one-step predictions into horizon-length predictions."""
-
-    n_models = len(step_predictions[0])
-    combined = []
-    for model_idx in range(n_models):
-        first = step_predictions[0][model_idx]
-        name = first.name
-        keys = tuple(first.params.keys())
-        params = {}
-        for step in step_predictions:
-            prediction = step[model_idx]
-            if prediction.name != name:
-                raise ValueError("forecaster distribution names must be stable by horizon")
-            if set(prediction.params) != set(keys):
-                raise ValueError("forecaster parameter names must be stable by horizon")
-        for key in keys:
-            values = [step[model_idx].params[key] for step in step_predictions]
-            if all(isinstance(value, str) for value in values):
-                if len(set(values)) != 1:
-                    raise ValueError("string distribution parameters must be stable by horizon")
-                params[key] = values[0]
-            else:
-                columns = [np.asarray(value, dtype=float).reshape((-1,)) for value in values]
-                if any(column.shape != (1,) for column in columns):
-                    raise ValueError("forecasters must return one-step distribution parameters")
-                params[key] = np.asarray([column[0] for column in columns], dtype=float)
-        combined.append(PredictiveDistribution(name, params))
-    return tuple(combined)
+    return values

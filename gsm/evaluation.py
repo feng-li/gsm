@@ -40,13 +40,19 @@ def predictive_log_score(
     dataset: Dataset,
     setting: ModelSetting,
     standardization: ModelStandardization | None = None,
-    n_samples: int = 0,
+    n_samples: int | None = None,
     seed: int = 0,
 ) -> PredictiveLogScore:
     """Compute held-out ELPD from posterior-sampled predictive densities."""
 
+    if standardization is None:
+        standardization = result.standardization
+    if standardization is None and setting.standardize:
+        raise ValueError("training standardization is required for predictive scoring")
     inputs = _prepare_model_inputs(dataset, setting, standardization)
 
+    if n_samples is None:
+        n_samples = result.n_predictive_samples
     if n_samples < 0:
         raise ValueError("n_samples must be non-negative")
     if result.posterior is not None and n_samples > 0:

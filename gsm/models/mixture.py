@@ -4,6 +4,16 @@ import jax.numpy as jnp
 from jax.nn import logsumexp
 
 
+def mixture_moments(weights, component_mean, component_variance):
+    """Combine moments without subtracting nearly equal second moments."""
+
+    mean = jnp.sum(weights * component_mean, axis=1)
+    variance = jnp.sum(
+        weights * (component_variance + (component_mean - mean[:, None]) ** 2), axis=1,
+    )
+    return mean, variance
+
+
 def log_mixture_weights(gating_coef, Z):
     """Reference-class multinomial-logit mixture weights.
 

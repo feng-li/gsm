@@ -42,6 +42,8 @@ class FitConfig:
     n_elbo_samples: int = 8
     n_predictive_samples: int = 100
     posterior_init_log_std: float = -5.0
+    n_validation_samples: int = 64
+    validation_interval: int = 25
 
 
 @dataclass(frozen=True)

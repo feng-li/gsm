@@ -7,9 +7,26 @@ from gsm.priors import (
     build_gaussian_coefficient_prior,
     build_gaussian_mixture_priors,
     convert_prior_to_link_scale,
+    coefficient_log_prior,
+    expected_gaussian_matrix_log_prob,
     gaussian_matrix_log_prob,
 )
 from gsm.variational import GaussianMixtureInputs
+
+
+def test_expected_gaussian_prior_includes_variance_and_correlations():
+    from gsm.priors import GaussianCoefficientPrior
+
+    covariance = np.array([[2., .5], [.5, 1.]])
+    precision = np.linalg.inv(covariance)
+    prior = GaussianCoefficientPrior(
+        np.array([1., -1.]), covariance, precision,
+        np.linalg.slogdet(covariance)[1], np.array([True, False]),
+    )
+    mean = jnp.array([[.5, 2.], [1., -1.]])
+    sd = jnp.array([[2., 3.], [.5, 1.]])
+    expected = gaussian_matrix_log_prob(mean, prior) - .5*np.sum(np.asarray(sd)**2*np.diag(precision))
+    np.testing.assert_allclose(expected_gaussian_matrix_log_prob(mean, jnp.log(sd), prior), expected)
 
 
 def test_convert_prior_to_link_scale_matches_identity_and_log_matlab_cases():
@@ -110,3 +127,22 @@ def test_gaussian_matrix_log_prob_includes_matlab_normalizing_constants():
         - 0.5 * (1.0**2 / 4.0)
     )
     np.testing.assert_allclose(log_prob, expected)
+
+
+def test_default_gaussian_coefficient_prior_is_normalized():
+    from scipy.stats import norm
+
+    value = jnp.array([[1., -2.], [3., 4.]])
+    actual = coefficient_log_prior(value, np.ones((3, 2)), 2., False, .01, .01)
+    np.testing.assert_allclose(actual, norm.logpdf(value, scale=2.).sum())
+
+
+def test_integrated_ard_prior_matches_normalized_student_t():
+    from scipy.stats import multivariate_t, norm
+
+    value = jnp.array([[1., -2.], [3., 4.]])
+    design = np.column_stack([np.ones(3), np.arange(3)])
+    actual = coefficient_log_prior(value, design, 2., True, 1.5, .7)
+    expected = norm.logpdf(np.asarray(value[:, 0]), scale=2.).sum()
+    expected += multivariate_t.logpdf(value[:, 1], df=3., shape=np.eye(2) * (.7 / 1.5))
+    np.testing.assert_allclose(actual, expected)

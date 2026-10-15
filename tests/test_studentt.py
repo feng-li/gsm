@@ -1,5 +1,6 @@
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from scipy.special import gammaln
 
 from gsm.config import FitConfig, StudentTMixtureSetting, studentt_mixture_setting
@@ -13,6 +14,29 @@ from gsm.models.studentt import (
     predict_mean_variance,
 )
 from gsm.variational import fit_variational, sample_studentt_mixture_posterior
+
+
+@pytest.mark.parametrize("df", [0.5, 1., 1.5, 2., 5.])
+def test_studentt_moments_respect_existence_conditions(df):
+    from gsm.febama import PredictiveDistribution
+
+    X = jnp.ones((1, 1))
+    params = StudentTMixtureParams(
+        jnp.full((1, 1), 4.), jnp.full((1, 1), jnp.log(df)),
+        jnp.zeros((1, 1)), jnp.zeros((0, 1)),
+    )
+    mean, variance = predict_mean_variance(params, X, X, X, X)
+    prediction = PredictiveDistribution("studentt", {"mean": 4., "df": df, "scale": 1.})
+    if df <= 1:
+        assert np.isnan(mean).all()
+        assert np.isnan(prediction.mean()).all()
+    else:
+        np.testing.assert_allclose(mean, [4.])
+        np.testing.assert_allclose(prediction.mean(), [4.])
+    if df <= 2:
+        assert np.isnan(variance).all()
+    else:
+        np.testing.assert_allclose(variance, [df / (df-2)])
 
 
 def test_studentt_setting_matches_matlab_studt_defaults():

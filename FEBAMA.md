@@ -7,7 +7,7 @@ current code supports precomputed LPD/features, MAP fitting of softmax gating
 coefficients, a predictive-distribution registry, basic and optional base
 forecasters, `tsfeatures`-based feature extraction, feature cleaning/scaling,
 CSV feature-table loading, rolling-origin LPD/feature construction, one-step
-and recursive multi-step forecasting/metrics, and a minimal runnable example
+and multi-step predictive forecasting/metrics, and a minimal runnable example
 script.
 
 ## Package Summary
@@ -127,7 +127,7 @@ gsm/febama/
   features.py        # feature extraction and feature cleaning/scaling
   scoring.py         # JAX logscore, softmax weights, predictive score utilities
   inference.py       # MAP first, then mean-field VB over gating coefficients
-  forecast.py        # recursive combination, MASE, SMAPE, log score summaries
+  forecast.py        # horizon combination, MASE, SMAPE, log score summaries
   api.py             # public workflow wrappers matching the R API shape
 ```
 
@@ -147,8 +147,31 @@ gsm/febama/
   scoring.py
 ```
 
-`forecast.py` currently implements recursive forecasting with per-horizon
-features, weights, component predictions, and optional VB sampled outputs.
+`forecast.py` combines each expert's full-horizon predictive marginals using
+features observed at the forecast origin. Features remain fixed across future
+horizons; predicted means are never treated as observations when fitting experts.
+VB weights and main predictive scores integrate coefficient uncertainty, with
+optional sampled outputs. `n_samples=0` selects plug-in weights or scores.
+
+Multi-step `compute_lpd_features` output has one row per origin/lead pair,
+with `origin` repeated and `lead` identifying the horizon step. Its objective
+is the same sum of marginal mixture log scores used by forecasting, not a
+joint density built from products of expert marginals. Chronological splits
+must exclude training targets at or beyond the first held-out origin.
+
+`FebamaFit` retains model names, feature names, and fitted scaling. Named
+scoring columns are aligned automatically; arrays must already use the fitted
+feature order and scale. Pass `model_names` to `forecast_febama` when custom
+model labels differ from the forecaster callable names. Prediction and scoring
+kernels are reused across calls, and score calculations remain in log space.
+The drift expert includes uncertainty from estimating drift.
+
+VB uses normalized Gaussian priors for active coefficients. Its
+`validation_interval` defaults to 25 updates. Results expose `n_iter`,
+`best_iteration`, `elbo_iterations`, and `termination_reason`; numerical
+failure returns a finite retained checkpoint with `success=False`.
+Optional `forecast_cache` storage in rolling construction can be passed back
+as `predictions` and raw `precomputed_features` when computing metrics.
 
 Do not put fixed data paths into config. Example scripts should accept `--data`
 and config objects should only describe model structure and fitting choices.
@@ -365,13 +388,14 @@ Remaining:
 - richer non-Gaussian forecaster examples that return Student-t, split-t,
   gamma, lognormal, or count predictive distributions.
 
-### Phase 5: Recursive Forecasting and Metrics - Partial
+### Phase 5: Predictive Forecasting and Metrics - Partial
 
 Port `R/forecast.R` after scoring, inference, and basic forecasters exist.
 
-1. Implement recursive forecasting:
-   - update features each horizon step;
-   - compute time-varying weights;
+1. Implement predictive forecasting:
+   - compute features at the observed forecast origin;
+   - use posterior-mean weights for VB;
+   - obtain native multi-step predictive distributions from each expert;
    - combine base forecast means;
    - compute mixture predictive density from the selected distribution for
      each component.
@@ -396,7 +420,7 @@ Implemented:
 
 - `gsm/febama/forecast.py`.
 - `FebamaForecast` result container.
-- one-step and recursive multi-step `forecast_febama(...)`.
+- one-step and multi-step marginal `forecast_febama(...)`.
 - posterior-sampled VB forecast weights, forecasts, and log scores in
   `forecast_febama(...)`.
 - `mase(...)` and `smape(...)`.
@@ -543,7 +567,8 @@ Completed:
 10. Added FEBAMA mean-field VB and posterior-sampled weights.
 11. Added posterior-sampled VB forecast weights, forecasts, and log scores to
     `forecast_febama(...)`.
-12. Added recursive multi-step `forecast_febama(...)`.
+12. Added multi-step `forecast_febama(...)`, subsequently corrected to retain
+    expert horizon uncertainty and origin-observed features.
 13. Added `summarize_performance(...)` for lists of forecast results.
 14. Added a fast one-origin FEBAMA script test and performance-summary output
     for `scripts/run_febama_example.py`.

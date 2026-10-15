@@ -644,6 +644,16 @@ def gaussian_matrix_log_prob(
     return jnp.sum(log_norm - 0.5 * quad)
 
 
+def expected_gaussian_matrix_log_prob(mean, log_std, prior):
+    """Exact Gaussian-prior expectation under independent Gaussian coefficients."""
+
+    expected = gaussian_matrix_log_prob(mean, prior)
+    if prior is None or mean.size == 0:
+        return expected
+    precision_diag = jnp.asarray(np.diag(prior.precision), dtype=mean.dtype)
+    return expected - 0.5 * jnp.sum(jnp.exp(2.0 * log_std) * precision_diag)
+
+
 def coefficient_log_prior(
     value: jnp.ndarray,
     design_matrix: np.ndarray,
@@ -665,7 +675,10 @@ def coefficient_log_prior(
     if not use_ard:
         if prior is not None:
             return gaussian_matrix_log_prob(value, prior)
-        return -0.5 * jnp.sum((value / coefficient_prior_scale) ** 2)
+        return -0.5 * jnp.sum(
+            (value / coefficient_prior_scale) ** 2
+            + jnp.log(2.0 * jnp.pi) + 2.0 * jnp.log(coefficient_prior_scale),
+        )
     if ard_shape <= 0 or ard_rate <= 0:
         raise ValueError("ard_shape and ard_rate must be positive")
     if value.size == 0:
@@ -680,16 +693,22 @@ def coefficient_log_prior(
     else:
         constant_weights = jnp.asarray(constant_mask, dtype=value.dtype)
         constant_prior = -0.5 * jnp.sum(
-            ((value / coefficient_prior_scale) ** 2) * constant_weights
+            ((value / coefficient_prior_scale) ** 2
+             + jnp.log(2.0 * jnp.pi) + 2.0 * jnp.log(coefficient_prior_scale))
+            * constant_weights
         )
 
     column_squares = jnp.sum(value**2, axis=0)
     group_size = value.shape[0]
     nonconstant_weights = 1.0 - jnp.asarray(constant_mask, dtype=value.dtype)
+    log_normalizer = (
+        math.lgamma(ard_shape + 0.5 * group_size) - math.lgamma(ard_shape)
+        + ard_shape * math.log(ard_rate) - 0.5 * group_size * math.log(2.0 * math.pi)
+    )
     ard_prior = -jnp.sum(
         nonconstant_weights
-        * (ard_shape + 0.5 * group_size)
-        * jnp.log(ard_rate + 0.5 * column_squares)
+        * ((ard_shape + 0.5 * group_size) * jnp.log(ard_rate + 0.5 * column_squares)
+           - log_normalizer)
     )
     return constant_prior + ard_prior
 

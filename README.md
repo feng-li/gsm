@@ -202,7 +202,7 @@ gsm/
     data.py                 # FEBAMA data containers
     distributions.py        # predictive distribution registry
     features.py             # tsfeatures adapter and feature cleaning/scaling
-    forecast.py             # recursive forecasting and metrics
+    forecast.py             # horizon predictive forecasts and metrics
     forecasters.py          # naive, drift, AutoETS/AutoARIMA, GARCH/EGARCH
     inference.py            # MAP/VB fitting for gating coefficients
     scoring.py              # JAX softmax weights and log predictive score
@@ -272,6 +272,34 @@ print(result.test_score.mean_elpd)
 earlier code. `result.train_result.posterior` contains the fitted mean-field
 Gaussian posterior with coefficient means and log standard deviations.
 
+Fits retain training scaling in `result.train_result.standardization`; direct
+calls to `predictive_log_score(...)` reuse it automatically. Predictive moments
+include parameter uncertainty using `FitConfig.n_predictive_samples` draws;
+zero selects plug-in moments. Explicit Gaussian-prior expectations are
+analytical when ARD is disabled.
+VI uses fresh Monte Carlo draws at each update,
+compiled optimization blocks, and a common independent draw set for restart
+selection. `validation_elbo` and `elbo_mc_error` report an additional independent
+ELBO estimate and its Monte Carlo standard error. `n_validation_samples`
+controls the validation batch size (default 64). `validation_interval` controls
+checkpoint spacing (default 25 updates); the final update is also checked.
+Independent diagnostic batches and predictive moment draws are processed in
+bounded batches instead of materializing every likelihood at once.
+ELBO history includes the initial objective and ends at the selected best
+checkpoint; optimization can continue beyond that checkpoint. `elbo_iterations`
+records the checkpoint indices, `n_iter` the actual updates attempted,
+`best_iteration` the selected update, and `termination_reason` distinguishes
+convergence, the iteration limit, and a non-finite update.
+
+Finite Monte Carlo draws do not establish that posterior moments exist.
+Student-t and split-t fits with Gaussian log-DF uncertainty report undefined
+predictive moments as `NaN`. Standard LogNorm's double-exponential Gaussian
+terms give infinite predictive moments, reported as `Inf`. These results carry
+`predictive_moment_warning`; density scoring remains available. Use the
+response-scale LogNormRep parameterization when finite lognormal moments are
+required. Explicit plug-in moments (`n_predictive_samples=0`) are conditional
+moments rather than posterior predictive moments.
+
 ## FEBAMA Basic API
 
 For precomputed component log predictive densities and feature matrices:
@@ -301,11 +329,35 @@ print(score.total)
 Use `fit_febama(..., fit_method="vb")` and `sample_weights(...)` when posterior
 weight uncertainty is needed. `forecast_febama(..., n_weight_samples=...)`
 returns posterior-sampled weights, forecasts, and log scores for VB fits.
+`compute_weights(...)` averages VB weights over posterior draws, and
+`score_febama(...)` integrates predictive densities before taking logarithms.
+Pass `n_samples=0` to either helper for a plug-in calculation.
 
 For live rolling-origin LPD and feature construction, use
 `compute_lpd_features(...)`. The example script `scripts/run_febama_example.py`
 uses that public helper and accepts `--data`, so data paths stay outside the
-FEBAMA config. For recursive forecasting after fitting, use `forecast_febama(...)`.
+FEBAMA config. For forecasting after fitting, use `forecast_febama(...)`.
+Multi-step forecasts use each expert's full horizon prediction and hold gating
+features fixed at their observed forecast-origin values.
+Rolling multi-step training stores one marginal LPD row per origin and lead,
+with repeated `origin` and a `lead` column. Training and forecasting both sum
+the marginal mixture log scores; this is not a joint horizon density. Splits
+must keep training target dates before the first held-out origin; the example
+splitter applies this embargo.
+
+Fits retain model/feature names and feature scaling. Named scoring inputs are
+aligned to the training order and incompatible names or scaling are rejected.
+Scoring arrays remain pre-standardized, positional inputs; apply
+`fit.feature_mean` and `fit.feature_sd` to new raw features first. When forecast
+model labels differ from callable names, pass `model_names` explicitly in the
+same order as `forecasters`. Gaussian and integrated ARD priors include their
+normalization constants in reported objectives.
+
+`compute_lpd_features(..., forecast_cache=cache)` optionally stores each
+origin's predictions and raw features. The example reuses this cache for
+held-out forecast metrics instead of refitting experts or extracting features
+again. Forecast scoring keeps weights in log space, including posterior
+averages, to preserve tiny component probabilities.
 Use `summarize_performance(...)` to aggregate a list of forecast results; the
 example script prints the same compact performance-summary row.
 

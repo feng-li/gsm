@@ -110,7 +110,7 @@ def _run_one(label: str, use_ard: bool, dataset, base_fit, args) -> ComparisonSu
     return ComparisonSummary(
         label=label,
         ard=use_ard,
-        iterations=len(history),
+        iterations=heldout.train_result.n_iter,
         converged=heldout.train_result.converged,
         initial_objective=float(history[0]),
         final_objective=float(history[-1]),

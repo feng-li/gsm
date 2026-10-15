@@ -64,6 +64,7 @@ def main() -> None:
     args = parser.parse_args()
 
     y, dates = _read_series(args.data, args.value_column, args.date_column)
+    forecast_cache = {}
     lpd_features = compute_lpd_features(
         SeriesData(x=y, date=dates),
         forecasters=FORECASTERS,
@@ -72,6 +73,7 @@ def main() -> None:
         start=args.start,
         max_origins=args.max_origins,
         feature_window=args.feature_window,
+        forecast_cache=forecast_cache,
     )
     train_raw, test_raw = _train_test_split(lpd_features, args.test_size)
 
@@ -111,6 +113,8 @@ def main() -> None:
         FORECASTERS,
         feature_names=train_clean.feature_names,
         feature_window=args.feature_window,
+        forecast_cache=forecast_cache,
+        raw_feature_names=tuple(args.features),
     )
     performance = summarize_performance(forecasts)
     performance_row = _performance_row(performance, equal_weight_score)
@@ -171,6 +175,19 @@ def _train_test_split(lpd_features, test_size: int):
     if test_size >= lpd_features.lpd.shape[0]:
         raise ValueError("test_size must be smaller than the number of rolling origins")
 
+    if lpd_features.origin is not None and lpd_features.lead is not None:
+        origins = np.unique(lpd_features.origin)
+        if test_size >= len(origins):
+            raise ValueError("test_size must leave training origins")
+        cutoff = origins[-test_size]
+        train = (lpd_features.origin < cutoff) & (
+            lpd_features.origin + lpd_features.lead - 1 < cutoff
+        )
+        test = lpd_features.origin >= cutoff
+        if not np.any(train):
+            raise ValueError("test_size and horizon must leave training targets before the holdout")
+        return _slice_lpd_features(lpd_features, train), _slice_lpd_features(lpd_features, test)
+
     split = lpd_features.lpd.shape[0] - test_size
     return _slice_lpd_features(lpd_features, slice(None, split)), _slice_lpd_features(
         lpd_features,
@@ -190,6 +207,7 @@ def _slice_lpd_features(lpd_features, rows):
         date=None
         if lpd_features.date is None
         else tuple(lpd_features.date[int(i)] for i in indices),
+        lead=None if lpd_features.lead is None else lpd_features.lead[rows],
     )
 
 
@@ -206,12 +224,15 @@ def _forecast_holdout(
     feature_window: int | None,
     frequency: int | None = 1,
     feature_function=None,
+    forecast_cache=None,
+    raw_feature_names=None,
 ):
     if origins is None or response is None:
         raise ValueError("holdout origins and responses are required")
     forecasts = []
     for origin, actual in zip(origins, response, strict=True):
         origin = int(origin)
+        cached = None if forecast_cache is None else forecast_cache[origin]
         history_dates = None
         if dates is not None and len(dates) > origin:
             history_dates = tuple(dates[: origin + 1])
@@ -225,11 +246,14 @@ def _forecast_holdout(
                 fit,
                 lpd_features,
                 forecasters=forecasters,
-                feature_names=feature_names,
+                feature_names=feature_names if raw_feature_names is None else raw_feature_names,
                 horizon=1,
                 feature_window=feature_window,
                 frequency=frequency,
                 feature_function=feature_function,
+                model_names=lpd_features.model_names,
+                predictions=None if cached is None else cached[0],
+                precomputed_features=None if cached is None else cached[1],
             )
         )
     return tuple(forecasts)

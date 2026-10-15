@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
+import jax
+import jax.numpy as jnp
+from jax.nn import logsumexp
 import numpy as np
 
 from gsm.febama.data import LpdFeatures, SeriesData
@@ -27,6 +30,12 @@ class FebamaFit:
     add_intercept: bool
     result: FebamaMapResult | FebamaVbResult
     posterior: object | None = None
+    n_predictive_samples: int = 100
+    seed: int = 123
+    model_names: tuple[str, ...] | None = None
+    feature_names: tuple[str, ...] | None = None
+    feature_mean: np.ndarray | None = None
+    feature_sd: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -35,6 +44,7 @@ class FebamaScore:
 
     total: float
     pointwise: np.ndarray
+    n_posterior_samples: int = 0
 
 
 def prepare_lpd_features(
@@ -45,6 +55,7 @@ def prepare_lpd_features(
     response=None,
     origin=None,
     date=None,
+    lead=None,
 ) -> LpdFeatures:
     """Build a validated ``LpdFeatures`` object from arrays."""
 
@@ -56,6 +67,7 @@ def prepare_lpd_features(
         feature_names=feature_names,
         origin=origin,
         date=date,
+        lead=lead,
     )
 
 
@@ -72,8 +84,13 @@ def compute_lpd_features(
     frequency: int | None = 1,
     feature_function: Callable | None = None,
     precomputed_features=None,
+    forecast_cache: dict | None = None,
 ) -> LpdFeatures:
-    """Build rolling component LPDs and features for FEBAMA fitting."""
+    """Build marginal LPD rows for each rolling origin and horizon step.
+
+    An optional caller-owned cache retains predictions and raw origin features
+    for reuse in forecast metrics, without refitting experts.
+    """
 
     y, dates = _series_values_and_dates(data)
     forecaster_tuple = tuple(forecasters)
@@ -117,8 +134,8 @@ def compute_lpd_features(
         history = y[:origin]
         actual = y[origin : origin + horizon]
         predictions = [forecaster(history, horizon) for forecaster in forecaster_tuple]
-        lpd_rows.append(np.asarray(log_prob_matrix(actual, predictions), dtype=float).sum(axis=0))
-        response_rows.append(actual[0] if horizon == 1 else actual)
+        lpd_rows.append(np.asarray(log_prob_matrix(actual, predictions), dtype=float))
+        response_rows.extend(actual)
 
         if feature_matrix is None:
             feature_history = history if feature_window is None else history[-int(feature_window) :]
@@ -128,18 +145,23 @@ def compute_lpd_features(
                 feature_function,
                 frequency,
             )
-            feature_rows.append(feature_values)
         else:
-            feature_rows.append(feature_matrix[row_idx])
+            feature_values = feature_matrix[row_idx]
+        feature_rows.extend([feature_values] * horizon)
+        if forecast_cache is not None:
+            forecast_cache[int(origin)] = (tuple(predictions), np.asarray(feature_values).copy())
 
     return LpdFeatures(
-        lpd=np.asarray(lpd_rows, dtype=float),
+        lpd=np.concatenate(lpd_rows, axis=0),
         features=np.asarray(feature_rows, dtype=float),
         response=np.asarray(response_rows, dtype=float),
         model_names=names,
         feature_names=feature_names_tuple,
-        origin=origins,
-        date=None if dates is None else tuple(dates[idx] for idx in origins),
+        origin=np.repeat(origins, horizon),
+        date=None if dates is None else tuple(
+            dates[origin + step] for origin in origins for step in range(horizon)
+        ),
+        lead=np.tile(np.arange(1, horizon + 1), len(origins)),
     )
 
 
@@ -157,9 +179,14 @@ def fit_febama(
     n_restarts: int = 1,
     seed: int = 123,
     posterior_init_log_std: float = -5.0,
+    n_validation_samples: int = 64,
+    n_predictive_samples: int = 100,
+    validation_interval: int = 25,
 ) -> FebamaFit:
     """Fit FEBAMA gating coefficients for precomputed component log densities."""
 
+    if n_predictive_samples < 0:
+        raise ValueError("n_predictive_samples must be non-negative")
     method = fit_method.lower()
     features = _features_for_model(lpd_features.features, add_intercept)
     if method == "map":
@@ -186,6 +213,8 @@ def fit_febama(
             n_restarts=n_restarts,
             seed=seed,
             posterior_init_log_std=posterior_init_log_std,
+            n_validation_samples=n_validation_samples,
+            validation_interval=validation_interval,
         )
         posterior = result.posterior
     else:
@@ -196,14 +225,41 @@ def fit_febama(
         add_intercept=add_intercept,
         result=result,
         posterior=posterior,
+        n_predictive_samples=n_predictive_samples,
+        seed=seed,
+        model_names=None if lpd_features.model_names is None else tuple(lpd_features.model_names),
+        feature_names=None if lpd_features.feature_names is None else tuple(lpd_features.feature_names),
+        feature_mean=None if lpd_features.feature_mean is None else lpd_features.feature_mean.copy(),
+        feature_sd=None if lpd_features.feature_sd is None else lpd_features.feature_sd.copy(),
     )
 
 
-def compute_weights(fit: FebamaFit, features) -> np.ndarray:
-    """Return FEBAMA softmax weights for a fitted model."""
+def compute_weights(
+    fit: FebamaFit,
+    features,
+    n_samples: int | None = None,
+    seed: int | None = None,
+) -> np.ndarray:
+    """Return posterior-mean weights for VB, or fitted weights for MAP.
 
-    matrix = _features_for_model(_raw_features(features), fit.add_intercept)
-    return np.asarray(np.exp(log_weights(fit.beta, matrix)))
+    Explicitly passing ``n_samples=0`` requests weights at mean coefficients.
+    """
+
+    return np.exp(compute_log_weights(fit, features, n_samples=n_samples, seed=seed))
+
+
+def compute_log_weights(fit, features, n_samples=None, seed=None):
+    """Return log posterior-mean weights without probability underflow."""
+
+    n_samples = fit.n_predictive_samples if n_samples is None else n_samples
+    if n_samples < 0:
+        raise ValueError("n_samples must be non-negative")
+    if fit.posterior is not None and n_samples > 0:
+        samples = sample_log_weights(
+            fit, features, n_samples=n_samples, seed=fit.seed if seed is None else seed,
+        )
+        return np.asarray(logsumexp(samples, axis=0) - np.log(n_samples))
+    return np.asarray(log_weights(fit.beta, _model_features(fit, features)))
 
 
 def sample_weights(
@@ -214,38 +270,94 @@ def sample_weights(
 ) -> np.ndarray:
     """Return posterior-sampled FEBAMA weights for a fitted VB model."""
 
+    return np.exp(sample_log_weights(fit, features, n_samples=n_samples, seed=seed))
+
+
+def sample_log_weights(fit, features, n_samples=100, seed=123):
+    """Return posterior-sampled log weights using a reusable compiled kernel."""
+
     if fit.posterior is None:
         raise ValueError("sample_weights requires a VB fit with a posterior")
-    matrix = _features_for_model(_raw_features(features), fit.add_intercept)
+    matrix = _model_features(fit, features)
     beta_samples = sample_febama_beta_posterior(
         fit.posterior,
         seed=seed,
         n_samples=n_samples,
     )
-    return np.asarray([np.exp(log_weights(beta, matrix)) for beta in beta_samples])
+    return np.asarray(_sample_log_weights(jnp.asarray(beta_samples), jnp.asarray(matrix)))
 
 
-def score_febama(lpd_features: LpdFeatures, fit: FebamaFit) -> FebamaScore:
-    """Score precomputed component log densities under fitted FEBAMA weights."""
+_sample_log_weights = jax.jit(jax.vmap(log_weights, in_axes=(0, None)))
 
-    features = _features_for_model(lpd_features.features, fit.add_intercept)
-    pointwise = np.asarray(logscore(lpd_features.lpd, features, fit.beta, sum=False))
-    return FebamaScore(total=float(np.sum(pointwise)), pointwise=pointwise)
+
+@jax.jit
+def _sample_log_scores(beta_samples, features, lpd):
+    log_w = _sample_log_weights(beta_samples, features)
+    return logsumexp(log_w + lpd[None, :, :], axis=2)
+
+
+def score_febama(
+    lpd_features: LpdFeatures,
+    fit: FebamaFit,
+    n_samples: int | None = None,
+    seed: int | None = None,
+) -> FebamaScore:
+    """Score the posterior predictive density, or MAP/plugin when requested."""
+
+    features = _model_features(fit, lpd_features)
+    order = _column_order(lpd_features.model_names, fit.model_names, "model")
+    lpd = lpd_features.lpd if order is None else lpd_features.lpd[:, order]
+    n_samples = fit.n_predictive_samples if n_samples is None else n_samples
+    if n_samples < 0:
+        raise ValueError("n_samples must be non-negative")
+    if fit.posterior is not None and n_samples > 0:
+        beta_samples = sample_febama_beta_posterior(
+            fit.posterior, seed=fit.seed if seed is None else seed, n_samples=n_samples,
+        )
+        scores = _sample_log_scores(jnp.asarray(beta_samples), jnp.asarray(features), jnp.asarray(lpd))
+        pointwise = np.asarray(logsumexp(scores, axis=0) - np.log(n_samples))
+    else:
+        pointwise = np.asarray(logscore(lpd, features, fit.beta, sum=False))
+        n_samples = 0
+    return FebamaScore(
+        total=float(np.sum(pointwise)), pointwise=pointwise, n_posterior_samples=n_samples,
+    )
 
 
 def _features_for_model(features, should_add_intercept: bool):
     features = np.asarray(features, dtype=float)
     if features.ndim != 2:
         raise ValueError("features must be a 2D matrix")
+    if not np.all(np.isfinite(features)):
+        raise ValueError("features must be finite")
     if should_add_intercept:
         return np.asarray(add_intercept(features))
     return features
 
 
-def _raw_features(features):
+def _column_order(names, reference, label):
+    if reference is None:
+        return None
+    if names is None or len(set(names)) != len(names) or set(names) != set(reference):
+        raise ValueError(f"{label} names must match the fitted model")
+    return [tuple(names).index(name) for name in reference]
+
+
+def _model_features(fit, features):
     if isinstance(features, LpdFeatures):
-        return features.features
-    return features
+        order = _column_order(features.feature_names, fit.feature_names, "feature")
+        _check_scaling(fit, features, order)
+        features = features.features if order is None else features.features[:, order]
+    return _features_for_model(features, fit.add_intercept)
+
+
+def _check_scaling(fit, data, order=None):
+    for name in ("feature_mean", "feature_sd"):
+        expected, actual = getattr(fit, name), getattr(data, name)
+        if expected is not None and actual is not None:
+            actual = actual if order is None else actual[order]
+            if not np.allclose(expected, actual, rtol=1e-12, atol=1e-12):
+                raise ValueError("feature scaling must match the fitted model")
 
 
 def _series_values_and_dates(data) -> tuple[np.ndarray, tuple[str, ...] | None]:

@@ -66,7 +66,7 @@ def test_forecast_febama_without_holdout_skips_scores():
     assert forecast.forecast.shape == (1,)
 
 
-def test_forecast_febama_recurses_across_multi_step_horizon():
+def test_forecast_febama_uses_origin_features_across_multi_step_horizon():
     fit, lpd_features = _fitted_gate()
     data = SeriesData(
         x=np.linspace(0.0, 1.0, 10),
@@ -92,10 +92,8 @@ def test_forecast_febama_recurses_across_multi_step_horizon():
     assert len(forecast.predictions) == 2
     assert forecast.predictions[0].mean().shape == (3,)
     np.testing.assert_allclose(forecast.weights.sum(axis=1), np.ones(3))
-    expected_second_feature = (
-        forecast.forecast[0] - lpd_features.feature_mean[0]
-    ) / lpd_features.feature_sd[0]
-    np.testing.assert_allclose(forecast.features[1, 0], expected_second_feature)
+    expected_feature = (data.x[-1] - lpd_features.feature_mean[0]) / lpd_features.feature_sd[0]
+    np.testing.assert_allclose(forecast.features[:, 0], np.full(3, expected_feature))
     assert np.isfinite(forecast.log_score)
     assert np.isfinite(forecast.mase)
     assert np.isfinite(forecast.smape)
@@ -123,6 +121,36 @@ def test_forecast_febama_vb_returns_posterior_sampled_forecasts():
     np.testing.assert_allclose(forecast.weight_samples.sum(axis=2), np.ones((4, 3)))
     assert np.isfinite(forecast.forecast_samples).all()
     assert np.isfinite(forecast.log_score_samples).all()
+    from scipy.special import logsumexp
+
+    sample_pointwise = logsumexp(np.log(forecast.weight_samples) + forecast.lpd, axis=2)
+    expected = np.sum(logsumexp(sample_pointwise, axis=0) - np.log(4))
+    np.testing.assert_allclose(forecast.log_score, expected)
+
+
+def test_multistep_forecast_preserves_expert_variance_and_observed_history():
+    from gsm.febama import naive_fore
+
+    fit, features = _fitted_gate()
+    y = np.array([0., 1., 0., 2.])
+    calls = []
+
+    def forecaster(history, horizon):
+        calls.append((np.asarray(history).copy(), horizon))
+        return naive_fore(history, horizon)
+
+    forecast = forecast_febama(
+        y, fit, features, (forecaster, forecaster), horizon=3,
+        feature_function=_last_feature,
+        model_names=fit.model_names,
+    )
+    expected = naive_fore(y, 3)
+    for prediction in forecast.predictions:
+        np.testing.assert_allclose(prediction.variance(), expected.variance())
+    assert len(calls) == 2
+    for history, horizon in calls:
+        np.testing.assert_array_equal(history, y)
+        assert horizon == 3
 
 
 def test_forecast_febama_map_keeps_sample_fields_empty():
@@ -235,6 +263,50 @@ def test_summarize_performance_validates_inputs():
         )
 
 
+@pytest.mark.parametrize("posterior_samples", [0, 8])
+def test_forecast_scoring_preserves_underflowed_weights(posterior_samples):
+    from dataclasses import replace
+    from gsm.febama import score_febama
+    from gsm.febama.inference import FebamaVbPosterior
+
+    fit, data = _fitted_gate()
+    beta = np.array([[-1000., 0.]])
+    posterior = None if posterior_samples == 0 else FebamaVbPosterior(
+        beta, np.full_like(beta, -30.), np.ones_like(beta, dtype=bool),
+    )
+    fit = replace(fit, beta=beta, posterior=posterior)
+
+    def rare(y, h):
+        return PredictiveDistribution("gaussian", {"mean": np.zeros(h), "sd": 1.})
+
+    def baseline(y, h):
+        return PredictiveDistribution("gaussian", {"mean": np.full(h, np.sqrt(20000.)), "sd": 1.})
+
+    forecast = forecast_febama(
+        SeriesData(np.arange(3.), np.zeros(1)), fit, data, (rare, baseline),
+        feature_function=_level_feature, model_names=fit.model_names,
+        n_weight_samples=posterior_samples,
+    )
+    score_data = prepare_lpd_features(
+        forecast.lpd, forecast.features, model_names=fit.model_names, feature_names=fit.feature_names,
+    )
+    expected = score_febama(score_data, fit, n_samples=posterior_samples, seed=123)
+    np.testing.assert_allclose(forecast.log_score, expected.total)
+    np.testing.assert_allclose(forecast.log_score, -1000. - .5 * np.log(2 * np.pi))
+    if posterior_samples:
+        np.testing.assert_allclose(forecast.log_score_samples, expected.total)
+
+
+def test_forecasts_align_named_experts_and_reject_unknown_experts():
+    fit, data = _fitted_gate()
+    options = dict(feature_function=_level_feature)
+    baseline = forecast_febama(np.arange(3.), fit, data, (_zero_forecaster, _one_forecaster), **options)
+    swapped = forecast_febama(np.arange(3.), fit, data, (_one_forecaster, _zero_forecaster), **options)
+    np.testing.assert_allclose(baseline.forecast, swapped.forecast)
+    with pytest.raises(ValueError, match="model names"):
+        forecast_febama(np.arange(3.), fit, data, (_zero_forecaster, _zero_forecaster), **options)
+
+
 def _fitted_gate():
     cleaned = _gate_features()
     fit = fit_febama(cleaned, coefficient_prior_scale=100.0)
@@ -261,7 +333,7 @@ def _gate_features():
     raw = prepare_lpd_features(
         lpd,
         x[:, None],
-        model_names=("zero", "one"),
+        model_names=("_zero_forecaster", "_one_forecaster"),
         feature_names=("level",),
     )
     return clean_features(raw)

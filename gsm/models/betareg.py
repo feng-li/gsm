@@ -7,7 +7,7 @@ from jax.nn import logsumexp
 from jax.scipy.special import betaln
 
 from gsm.links import inverse_link
-from gsm.models.mixture import log_mixture_weights
+from gsm.models.mixture import log_mixture_weights, mixture_moments
 
 
 @dataclass(frozen=True)
@@ -83,10 +83,7 @@ def predict_mean_variance(params: BetaRegMixtureParams, X_mean, X_dispersion, Z)
     mean, dispersion = component_features(params, X_mean, X_dispersion)
     component_variance = mean * (1.0 - mean) / (1.0 + dispersion)
     weights = jnp.exp(log_mixture_weights(params.gating_coef, Z))
-    pred_mean = jnp.sum(weights * mean, axis=1)
-    pred_second = jnp.sum(weights * (component_variance + mean**2), axis=1)
-    pred_variance = pred_second - pred_mean**2
-    return pred_mean, pred_variance
+    return mixture_moments(weights, mean, component_variance)
 
 
 def _positive(value):

@@ -21,6 +21,7 @@ from gsm.priors import (
 from gsm.vi.common import (
     VariationalResult,
     fit_design_standardization,
+    guard_lognormal_moments,
     standardize_designs,
     validate_positive_response,
 )
@@ -273,11 +274,23 @@ def fit_lognormal_mixture_vb(
     """Fit the lognormal mixture scaffold with JAX gradients and local Adam."""
 
     fit = fit or FitConfig()
-    inputs = prepare_lognormal_mixture_inputs(dataset, setting)
+    standardization = fit_lognormal_mixture_standardization(dataset, setting)
+    inputs = prepare_lognormal_mixture_inputs(dataset, setting, standardization)
     coefficient_priors = build_lognormal_mixture_priors(inputs, setting)
     return fit_mean_field_mixture_vb(
         fit=fit,
         inputs=inputs,
+        standardization=standardization,
+        moment_policy=(lambda posterior, mean, variance: guard_lognormal_moments(
+            posterior, inputs.X_mean, inputs.X_scale, mean, variance,
+        )) if setting.parameterization == "standard" else None,
+        predict_moments=lambda tree: lognormal_predict_mean_variance(
+            tree_to_lognormal_params(tree),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_scale),
+            jnp.asarray(inputs.Z),
+            parameterization=setting.parameterization,
+        ),
         initialize_variational_params=lambda: initialize_lognormal_mixture_variational_params(
             inputs,
             setting,

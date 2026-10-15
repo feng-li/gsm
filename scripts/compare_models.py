@@ -125,7 +125,7 @@ def _run_model(label, setting, dataset, fit: FitConfig, args) -> ModelComparison
         label=label,
         model_name=setting.model_name,
         components=setting.n_components,
-        iterations=len(history),
+        iterations=heldout.train_result.n_iter,
         converged=heldout.train_result.converged,
         initial_objective=float(history[0]),
         final_objective=float(history[-1]),

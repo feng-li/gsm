@@ -29,7 +29,8 @@ def rw_drift_fore(y, horizon: int, interval_level: float = 90.0) -> PredictiveDi
     steps = np.arange(1, horizon + 1, dtype=float)
     drift = 0.0 if y.size < 2 else (y[-1] - y[0]) / (y.size - 1)
     innovations = np.diff(y) - drift if y.size > 1 else np.asarray([0.0])
-    sd = _residual_sd(innovations) * np.sqrt(steps)
+    drift_uncertainty = 1.0 + steps / max(y.size - 1, 1)
+    sd = _residual_sd(innovations) * np.sqrt(steps * drift_uncertainty)
     mean = y[-1] + steps * drift
     return _gaussian_prediction(mean, sd)
 
@@ -122,10 +123,14 @@ def _statsforecast_model(class_name: str, **kwargs):
 def _statsforecast_prediction(model, y, horizon, interval_level):
     y = _as_series(y)
     horizon = _validate_horizon(horizon)
-    level = int(interval_level)
+    level = float(interval_level)
+    if not np.isfinite(level) or not 0.0 < level < 100.0:
+        raise ValueError("interval_level must be between 0 and 100")
+    if level.is_integer():
+        level = int(level)
     out = model.forecast(y=y, h=horizon, level=[level])
     mean = np.asarray(out["mean"], dtype=float)
-    sd = _interval_sd(mean, out.get(f"lo-{level}"), interval_level)
+    sd = _interval_sd(mean, out.get(f"lo-{level:g}"), interval_level)
     return _gaussian_prediction(mean, sd)
 
 
@@ -173,10 +178,12 @@ def _arch_forecast(
 
 
 def _interval_sd(mean, lower, interval_level):
+    if not np.isfinite(interval_level) or not 0.0 < interval_level < 100.0:
+        raise ValueError("interval_level must be between 0 and 100")
     if lower is None:
-        return np.full_like(mean, np.finfo(float).tiny)
+        raise ValueError("forecaster did not return the requested lower prediction interval")
     lower = np.asarray(lower, dtype=float)
-    denom = norm.ppf(1.0 - float(interval_level) / 100.0)
+    denom = norm.ppf((1.0 - float(interval_level) / 100.0) / 2.0)
     if not np.isfinite(denom) or denom == 0.0:
         raise ValueError("interval_level must define a finite lower-tail quantile")
     return _positive_scale((lower - mean) / denom)

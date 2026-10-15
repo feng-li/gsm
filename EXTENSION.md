@@ -208,6 +208,19 @@ Add the same small set of functions the current models use:
 
 The model-specific `fit_new_mixture_vb` wrapper should prepare inputs and
 priors, then call `fit_mean_field_mixture_vb(...)` from `gsm/vi/engine.py`.
+Fit and pass training `standardization` to that helper, and supply a
+`predict_moments` callback over parameter trees so posterior predictive moments
+include coefficient uncertainty. The engine resamples optimization noise each
+step and evaluates restarts on shared independent draws.
+For families whose posterior moments need support or integrability checks,
+also supply `moment_policy(posterior, mean, variance)`, returning adjusted
+moments and a warning string (or `None`). Do not infer moment existence from
+a finite collection of sampled conditional moments.
+
+Use `gsm.models.mixture.mixture_moments` for stable centered mixture variance.
+Prior log densities must retain normalization constants, including when
+integrating out ARD precision. Optimizer histories contain validation
+checkpoints, not every update; use `n_iter` and `elbo_iterations` for reporting.
 
 Finally export the public names from `gsm/variational.py` and register the
 model fitter in `gsm/model_registry.py`; `fit_variational` dispatches through

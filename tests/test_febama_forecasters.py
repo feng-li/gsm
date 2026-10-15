@@ -5,6 +5,7 @@ import pytest
 
 from gsm.febama.distributions import log_prob_matrix
 from gsm.febama.forecasters import (
+    _statsforecast_prediction,
     auto_arima_fore,
     egarch_fore,
     ets_fore,
@@ -12,6 +13,27 @@ from gsm.febama.forecasters import (
     naive_fore,
     rw_drift_fore,
 )
+from scipy.stats import norm
+
+
+@pytest.mark.parametrize("level", [50., 90., 95., 99.5])
+def test_statsforecast_recovers_sd_from_central_interval(level):
+    class ForecastModel:
+        def forecast(self, y, h, level):
+            mean = np.arange(h, dtype=float)
+            return {"mean": mean, f"lo-{level[0]:g}": mean + 1.5 * norm.ppf((1-level[0]/100)/2)}
+
+    prediction = _statsforecast_prediction(ForecastModel(), [0., 1., 0.], 3, level)
+    np.testing.assert_allclose(prediction.variance(), np.full(3, 1.5**2))
+
+
+def test_statsforecast_rejects_missing_prediction_interval():
+    class ForecastModel:
+        def forecast(self, **kwargs):
+            return {"mean": np.zeros(kwargs["h"])}
+
+    with pytest.raises(ValueError, match="lower prediction interval"):
+        _statsforecast_prediction(ForecastModel(), [0., 1.], 1, 90.)
 
 
 def _series(n=50):
@@ -49,6 +71,13 @@ def test_simple_forecasters_handle_short_and_constant_series():
     np.testing.assert_allclose(constant.mean(), np.asarray([1.0, 1.0]))
     assert np.all(np.asarray(single.variance()) > 0.0)
     assert np.all(np.asarray(constant.variance()) > 0.0)
+
+
+def test_drift_variance_includes_estimation_uncertainty():
+    y = np.array([0., 1., 3., 4., 7., 9.])
+    steps = np.arange(1, 11)
+    expected = np.var(np.diff(y), ddof=1) * steps * (1. + steps / (len(y) - 1))
+    np.testing.assert_allclose(rw_drift_fore(y, 10).variance(), expected)
 
 
 def test_forecasters_validate_inputs():

@@ -269,11 +269,20 @@ def fit_splitnormal_mixture_vb(
     """Fit the split-normal mixture scaffold with JAX gradients and local Adam."""
 
     fit = fit or FitConfig()
-    inputs = prepare_splitnormal_mixture_inputs(dataset, setting)
+    standardization = fit_splitnormal_mixture_standardization(dataset, setting)
+    inputs = prepare_splitnormal_mixture_inputs(dataset, setting, standardization)
     coefficient_priors = build_splitnormal_mixture_priors(inputs, setting)
     return fit_mean_field_mixture_vb(
         fit=fit,
         inputs=inputs,
+        standardization=standardization,
+        predict_moments=lambda tree: splitnormal_predict_mean_variance(
+            tree_to_splitnormal_params(tree),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_scale),
+            jnp.asarray(inputs.X_skewness),
+            jnp.asarray(inputs.Z),
+        ),
         initialize_variational_params=lambda: initialize_splitnormal_mixture_variational_params(
             inputs,
             setting,

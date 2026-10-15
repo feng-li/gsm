@@ -232,11 +232,19 @@ def fit_binomial_mixture_vb(
     """Fit the binomial mixture scaffold with JAX gradients and Adam."""
 
     fit = fit or FitConfig()
-    inputs = prepare_binomial_mixture_inputs(dataset, setting)
+    standardization = fit_binomial_mixture_standardization(dataset, setting)
+    inputs = prepare_binomial_mixture_inputs(dataset, setting, standardization)
     coefficient_priors = build_binomial_mixture_priors(inputs, setting)
     return fit_mean_field_mixture_vb(
         fit=fit,
         inputs=inputs,
+        standardization=standardization,
+        predict_moments=lambda tree: binomial_predict_mean_variance(
+            tree_to_binomial_params(tree),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.Z),
+            trials=inputs.y,
+        ),
         initialize_variational_params=lambda: initialize_binomial_mixture_variational_params(
             inputs,
             setting,

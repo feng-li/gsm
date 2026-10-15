@@ -266,11 +266,20 @@ def fit_gamma_mixture_vb(
     """Fit the gamma mixture scaffold with JAX gradients and local Adam."""
 
     fit = fit or FitConfig()
-    inputs = prepare_gamma_mixture_inputs(dataset, setting)
+    standardization = fit_gamma_mixture_standardization(dataset, setting)
+    inputs = prepare_gamma_mixture_inputs(dataset, setting, standardization)
     coefficient_priors = build_gamma_mixture_priors(inputs, setting)
     return fit_mean_field_mixture_vb(
         fit=fit,
         inputs=inputs,
+        standardization=standardization,
+        predict_moments=lambda tree: gamma_predict_mean_variance(
+            tree_to_gamma_params(tree),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_variance),
+            jnp.asarray(inputs.Z),
+            parameterization=setting.parameterization,
+        ),
         initialize_variational_params=lambda: initialize_gamma_mixture_variational_params(
             inputs,
             setting,

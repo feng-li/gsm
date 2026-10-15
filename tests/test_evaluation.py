@@ -1,4 +1,7 @@
+from dataclasses import replace
+
 import numpy as np
+import pytest
 
 from gsm.config import (
     FitConfig,
@@ -14,6 +17,31 @@ from gsm.evaluation import (
     predictive_log_score,
 )
 from gsm.variational import fit_variational
+
+
+def test_direct_fit_preserves_training_scaling_for_future_scores():
+    from gsm.vi.gaussian import fit_gaussian_mixture_vb
+
+    train = Dataset(np.array([[-1.], [0.], [1.]]),
+                    np.column_stack([np.ones(3), [-1., 0., 1.]]), "y", ("Const", "x"))
+    test = Dataset(np.array([[10.], [12.]]),
+                   np.column_stack([np.ones(2), [10., 12.]]), "y", train.x_names)
+    setting = GaussianMixtureSetting(
+        n_components=1, covs=((0, 1), (0,)), covs_mix=(0,), standardize=1,
+    )
+    result = fit_gaussian_mixture_vb(
+        train, setting, FitConfig(max_iter=2, n_restarts=1, n_validation_samples=4,
+                                  n_predictive_samples=0),
+    )
+    assert result.standardization is not None
+    implicit = predictive_log_score(result, test, setting)
+    explicit = predictive_log_score(result, test, setting, result.standardization)
+    np.testing.assert_allclose(implicit.pointwise, explicit.pointwise)
+    one = Dataset(test.y[:1], test.X[:1], "y", train.x_names)
+    np.testing.assert_allclose(predictive_log_score(result, one, setting).pointwise,
+                               implicit.pointwise[:1])
+    with pytest.raises(ValueError, match="training standardization"):
+        predictive_log_score(replace(result, standardization=None), test, setting)
 
 
 def test_chronological_holdout_indices():

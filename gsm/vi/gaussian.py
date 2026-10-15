@@ -254,11 +254,19 @@ def fit_gaussian_mixture_vb(
     """Fit the Gaussian mixture scaffold with JAX gradients and local Adam."""
 
     fit = fit or FitConfig()
-    inputs = prepare_gaussian_mixture_inputs(dataset, setting)
+    standardization = fit_gaussian_mixture_standardization(dataset, setting)
+    inputs = prepare_gaussian_mixture_inputs(dataset, setting, standardization)
     coefficient_priors = build_gaussian_mixture_priors(inputs, setting)
     return fit_mean_field_mixture_vb(
         fit=fit,
         inputs=inputs,
+        standardization=standardization,
+        predict_moments=lambda tree: predict_mean_variance(
+            tree_to_gaussian_params(tree),
+            jnp.asarray(inputs.X_mean),
+            jnp.asarray(inputs.X_variance),
+            jnp.asarray(inputs.Z),
+        ),
         initialize_variational_params=lambda: initialize_gaussian_mixture_variational_params(
             inputs,
             setting,

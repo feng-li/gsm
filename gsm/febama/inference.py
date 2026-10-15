@@ -51,6 +51,11 @@ class FebamaVbResult:
     success: bool
     message: str
     n_iter: int
+    validation_elbo: float | None = None
+    elbo_mc_error: float | None = None
+    best_iteration: int = 0
+    termination_reason: str = ""
+    elbo_iterations: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +66,8 @@ class _FebamaVbFitOptions:
     n_elbo_samples: int
     n_restarts: int
     seed: int
+    n_validation_samples: int = 64
+    validation_interval: int = 25
 
 
 def fit_map(
@@ -79,7 +86,7 @@ def fit_map(
     beta0 = np.where(mask, beta0, 0.0)
     par0 = active_beta_vector(beta0, mask)
     initial_objective = float(
-        log_posterior(lpd_array, features_array, beta0, coefficient_prior_scale)
+        log_posterior(lpd_array, features_array, beta0, coefficient_prior_scale, mask)
     )
 
     if par0.size == 0:
@@ -97,26 +104,21 @@ def fit_map(
     active_indices = jnp.asarray(np.flatnonzero(mask.ravel()), dtype=jnp.int32)
 
     def objective_and_grad(par):
-        par = jnp.asarray(par)
-        value, grad = value_and_grad(_active_log_posterior)(
-            par,
-            lpd_array,
-            features_array,
-            template,
-            active_indices,
-            coefficient_prior_scale,
+        value, grad = _map_value_and_grad(
+            jnp.asarray(par), jnp.asarray(lpd_array), jnp.asarray(features_array),
+            jnp.asarray(template), active_indices, coefficient_prior_scale,
         )
-        return -float(value), -np.asarray(grad, dtype=float)
+        return float(value), np.asarray(grad, dtype=float)
 
     opt = minimize(
-        fun=lambda par: objective_and_grad(par)[0],
+        fun=objective_and_grad,
         x0=par0,
-        jac=lambda par: objective_and_grad(par)[1],
+        jac=True,
         method="BFGS",
         options={"maxiter": max_iter},
     )
     beta = replace_active_beta(template, mask, opt.x)
-    objective = float(log_posterior(lpd_array, features_array, beta, coefficient_prior_scale))
+    objective = float(log_posterior(lpd_array, features_array, beta, coefficient_prior_scale, mask))
     return FebamaMapResult(
         beta=beta,
         active_mask=mask,
@@ -141,9 +143,13 @@ def fit_vb(
     n_restarts: int = 1,
     seed: int = 123,
     posterior_init_log_std: float = -5.0,
+    n_validation_samples: int = 64,
+    validation_interval: int = 25,
 ) -> FebamaVbResult:
     """Fit FEBAMA gating coefficients with a mean-field Gaussian posterior."""
 
+    if not np.isfinite(coefficient_prior_scale) or coefficient_prior_scale <= 0:
+        raise ValueError("coefficient_prior_scale must be finite and positive")
     lpd_array, features_array = _validate_training_arrays(lpd, features)
     beta0 = _initial_beta(lpd_array, features_array, initial_beta)
     mask = _active_mask(beta0, active_mask)
@@ -158,7 +164,7 @@ def fit_vb(
             log_std=np.zeros_like(beta0),
             active_mask=mask,
         )
-        objective = float(log_posterior(lpd_array, features_array, beta0, coefficient_prior_scale))
+        objective = float(logscore(lpd_array, features_array, beta0))
         return FebamaVbResult(
             beta=beta0,
             posterior=posterior,
@@ -169,6 +175,7 @@ def fit_vb(
             success=True,
             message="no active coefficients",
             n_iter=0,
+            termination_reason="no active coefficients",
         )
 
     fit_options = _FebamaVbFitOptions(
@@ -178,6 +185,8 @@ def fit_vb(
         n_elbo_samples=int(n_elbo_samples),
         n_restarts=int(n_restarts),
         seed=int(seed),
+        n_validation_samples=int(n_validation_samples),
+        validation_interval=int(validation_interval),
     )
 
     def initialize_variational_params():
@@ -186,17 +195,19 @@ def fit_vb(
 
     def objective_for_noise(noise_tree):
         def objective(variational_tree):
-            return monte_carlo_variational_elbo(
+            value = monte_carlo_variational_elbo(
                 variational_tree,
                 noise_tree,
-                lambda sample_tree: _active_log_posterior(
-                    sample_tree["active_beta"],
-                    lpd_array,
-                    features_array,
-                    template,
-                    active_indices,
-                    coefficient_prior_scale,
+                lambda sample_tree: logscore(
+                    lpd_array, features_array,
+                    _replace_active_beta_jax(template, active_indices, sample_tree["active_beta"]),
                 ),
+            )
+            mean = variational_tree["mean"]["active_beta"]
+            log_std = variational_tree["log_std"]["active_beta"]
+            return value - 0.5 * jnp.sum(
+                (mean**2 + jnp.exp(2.0 * log_std)) / coefficient_prior_scale**2
+                + jnp.log(2.0 * jnp.pi) + 2.0 * jnp.log(coefficient_prior_scale),
             )
 
         return objective
@@ -222,7 +233,7 @@ def fit_vb(
             objective=float(history[-1]),
             success=finite,
             message="converged" if converged else "maximum iterations reached",
-            n_iter=int(history.shape[0]),
+            n_iter=int(history.shape[0] - 1),
         )
 
     return optimize_restarts(
@@ -256,10 +267,9 @@ def sample_febama_beta_posterior(
         dtype=jnp.asarray(active_mean).dtype,
     )
     active_samples = active_mean + np.exp(active_log_std) * np.asarray(noise)
-    template = np.zeros_like(mean)
-    return np.asarray(
-        [replace_active_beta(template, mask, active_samples[idx]) for idx in range(n_samples)]
-    )
+    samples = np.zeros((n_samples, *mean.shape), dtype=float)
+    samples[:, mask] = active_samples
+    return samples
 
 
 def log_posterior(
@@ -267,14 +277,18 @@ def log_posterior(
     features,
     beta,
     coefficient_prior_scale: float = 10.0,
+    active_mask=None,
 ):
     """Return FEBAMA logscore plus an independent Gaussian coefficient prior."""
 
     scale = float(coefficient_prior_scale)
-    if scale <= 0.0:
-        raise ValueError("coefficient_prior_scale must be positive")
+    if not np.isfinite(scale) or scale <= 0.0:
+        raise ValueError("coefficient_prior_scale must be finite and positive")
     beta = jnp.asarray(beta)
-    return logscore(lpd, features, beta, sum=True) - 0.5 * jnp.sum((beta / scale) ** 2)
+    mask = jnp.ones_like(beta, dtype=bool) if active_mask is None else jnp.asarray(active_mask)
+    return logscore(lpd, features, beta, sum=True) - 0.5 * jnp.sum(
+        jnp.where(mask, (beta / scale) ** 2 + jnp.log(2.0 * jnp.pi) + 2.0 * jnp.log(scale), 0.),
+    )
 
 
 def active_beta_vector(beta, active_mask) -> np.ndarray:
@@ -306,7 +320,15 @@ def _active_log_posterior(
     coefficient_prior_scale,
 ):
     beta = _replace_active_beta_jax(beta_template, active_indices, active_beta)
-    return log_posterior(lpd, features, beta, coefficient_prior_scale)
+    return logscore(lpd, features, beta) - 0.5 * jnp.sum(
+        (active_beta / coefficient_prior_scale) ** 2
+        + jnp.log(2.0 * jnp.pi) + 2.0 * jnp.log(coefficient_prior_scale),
+    )
+
+
+_map_value_and_grad = jax.jit(value_and_grad(
+    lambda *args: -_active_log_posterior(*args),
+))
 
 
 def _replace_active_beta_jax(beta_template, active_indices, active_beta):
@@ -329,6 +351,10 @@ def _validate_training_arrays(lpd, features):
         raise ValueError("lpd must contain at least two component columns")
     if not np.all(np.isfinite(features_array)):
         raise ValueError("features must be finite")
+    if lpd_array.shape[0] == 0:
+        raise ValueError("lpd must contain at least one observation")
+    if np.any(np.isnan(lpd_array) | np.isposinf(lpd_array)):
+        raise ValueError("lpd must not contain NaN or positive infinity")
     if not np.all(np.any(np.isfinite(lpd_array), axis=1)):
         raise ValueError("each lpd row must contain at least one finite value")
     return lpd_array, features_array
